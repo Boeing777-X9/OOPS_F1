@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root
+{
+  --background: #0b0b0e;
+  --foreground: #f4f4f5;
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@theme inline
+{
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-f1-red: #E10600;
+  --color-f1-dark: #0b0b0e;
+  --color-f1-card: #141419;
+  --color-f1-border: #23232b;
+}
+
+body
+{
+  background-color: #0b0b0e;
+  color: #f4f4f5;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4
+{
+  font-family: var(--font-sans);
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
