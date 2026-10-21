@@ -23,23 +23,104 @@ import {
   HeadToHeadComparison
 } from "@/types/f1";
 
+interface TopDriverPrediction
+{
+  name: string;
+  code: string;
+  team: string;
+  grid: number;
+  probPct: number;
+}
+
+interface QualiGridEntry
+{
+  pos: number;
+  code: string;
+  name: string;
+  team: string;
+  time?: string;
+  gap?: string;
+}
+
+export const ALL_2026_DRIVERS = [
+  { code: "ANT", name: "A.K. Antonelli", team: "Mercedes" },
+  { code: "RUS", name: "G. Russell", team: "Mercedes" },
+  { code: "HAM", name: "L. Hamilton", team: "Ferrari" },
+  { code: "VER", name: "M. Verstappen", team: "Red Bull" },
+  { code: "LEC", name: "C. Leclerc", team: "Ferrari" },
+  { code: "NOR", name: "L. Norris", team: "McLaren" },
+  { code: "PIA", name: "O. Piastri", team: "McLaren" },
+  { code: "HAD", name: "I. Hadjar", team: "Red Bull" },
+  { code: "LAW", name: "L. Lawson", team: "RB" },
+  { code: "GAS", name: "P. Gasly", team: "Alpine" },
+  { code: "LIN", name: "A. Lindblad", team: "RB" },
+  { code: "COL", name: "F. Colapinto", team: "Alpine" },
+  { code: "BEA", name: "O. Bearman", team: "Haas" },
+  { code: "HUL", name: "N. Hülkenberg", team: "Audi" },
+  { code: "BOR", name: "G. Bortoleto", team: "Audi" },
+  { code: "ALO", name: "F. Alonso", team: "Aston Martin" },
+  { code: "OCO", name: "E. Ocon", team: "Haas" },
+  { code: "SAI", name: "C. Sainz Jr.", team: "Williams" },
+  { code: "ALB", name: "A. Albon", team: "Williams" },
+  { code: "TSU", name: "Y. Tsunoda", team: "RB" },
+  { code: "STR", name: "L. Stroll", team: "Aston Martin" },
+  { code: "BOT", name: "V. Bottas", team: "Cadillac" },
+  { code: "PER", name: "S. Pérez", team: "Cadillac" }
+];
+
+export const DEFAULT_TOP10_BY_TRACK: Record<string, string[]> = {
+  monaco: ["ANT", "RUS", "HAM", "VER", "LEC", "NOR", "PIA", "HAD", "LAW", "GAS"],
+  silverstone: ["RUS", "HAM", "NOR", "VER", "ANT", "PIA", "LEC", "HAD", "BEA", "ALB"],
+  monza: ["VER", "NOR", "RUS", "HAM", "LEC", "ANT", "PIA", "HUL", "HAD", "COL"]
+};
+
+export interface ConstructorTrackAssessment
+{
+  team: string;
+  tier: "Tier 1 Pacesetter" | "Tier 2 Midfield" | "Backmarker / High Attrition";
+  tierNum: 1 | 2 | 3;
+  carSuitabilityScore: number;
+  paceDeltaPerLap: string;
+  dnfRatePct: number;
+  carDnaAdvantage: string;
+  trackVerdict: string;
+}
+
 interface PredictionResult
 {
   circuit: "monaco" | "silverstone" | "monza";
+  circuitName?: string;
+  qualiMode?: "without_quali" | "official_quali" | "manual_quali";
+  modeLabel?: string;
+  appliedGrid?: QualiGridEntry[];
+  bestConstructor?: ConstructorTrackAssessment;
+  constructorHierarchy?: ConstructorTrackAssessment[];
   predictedWinner: string;
   winnerTeam: string;
   winProbabilityPct: number;
+  runnerUp?: string;
+  runnerUpProbPct?: number;
+  topDrivers?: TopDriverPrediction[];
+  allDrivers?: TopDriverPrediction[];
   fastestLapDriver: string;
   safetyCarProbabilityPct: number;
   keyStrategicFactor: string;
   recommendedCompoundSequence: string;
   pitStopsExpected: number;
+  trainingDataset?: string;
+  poleConversionRate20Yr?: string;
 }
 
 export default function Home()
 {
   const [selectedTrack, setSelectedTrack] = useState<"monaco" | "silverstone" | "monza">("monaco");
+  const [qualiMode, setQualiMode] = useState<"without_quali" | "official_quali" | "manual_quali">("official_quali");
+  const [manualTop10, setManualTop10] = useState<string[]>(DEFAULT_TOP10_BY_TRACK.monaco);
+  const [showAllDrivers, setShowAllDrivers] = useState(false);
+  const [showConstructorHierarchy, setShowConstructorHierarchy] = useState(false);
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [isWetWeather, setIsWetWeather] = useState(false);
 
   const [standings, setStandings] = useState<Driver[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetrySample | null>(null);
@@ -55,20 +136,103 @@ export default function Home()
     { id: "monza", name: "Italian Grand Prix", track: "Monza National Autodrome", flag: "🇮🇹", date: "Sep 06" }
   ] as const;
 
-  const loadPrediction = (track: "monaco" | "silverstone" | "monza") =>
+  const loadPrediction = (
+    track: "monaco" | "silverstone" | "monza" = selectedTrack,
+    mode: "without_quali" | "official_quali" | "manual_quali" = qualiMode,
+    top10: string[] = manualTop10,
+    wet: boolean = isWetWeather
+  ) =>
   {
     setSelectedTrack(track);
-    fetch(`/api/predictions?track=${track}`)
+    setQualiMode(mode);
+    setIsSimulating(true);
+
+    let url = `/api/predictions?track=${track}&mode=${mode}&rain=${wet}`;
+    if (mode === "manual_quali")
+    {
+      const gridParam = top10.map((code, idx) => `${code}:${idx + 1}`).join(",");
+      url += `&pole=${top10[0]}&customGrid=${gridParam}`;
+    }
+
+    fetch(url)
       .then((res) => res.json())
-      .then((data) => data.prediction && setPredictionData(data.prediction))
-      .catch(console.error);
+      .then((data) =>
+      {
+        if (data.prediction)
+        {
+          setPredictionData(data.prediction);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setTimeout(() => setIsSimulating(false), 200));
+  };
+
+  const handleTrackChange = (trackId: "monaco" | "silverstone" | "monza") =>
+  {
+    const nextTop10 = DEFAULT_TOP10_BY_TRACK[trackId] || DEFAULT_TOP10_BY_TRACK.monaco;
+    setManualTop10(nextTop10);
+    loadPrediction(trackId, qualiMode, nextTop10);
+  };
+
+  const handleTop10SlotChange = (posIndex: number, newDriverCode: string) =>
+  {
+    const nextTop10 = [...manualTop10];
+    const existingIndex = nextTop10.indexOf(newDriverCode);
+
+    if (existingIndex !== -1 && existingIndex !== posIndex)
+    {
+      const displacedDriver = nextTop10[posIndex];
+      nextTop10[posIndex] = newDriverCode;
+      nextTop10[existingIndex] = displacedDriver;
+    }
+    else
+    {
+      nextTop10[posIndex] = newDriverCode;
+    }
+
+    setManualTop10(nextTop10);
+    loadPrediction(selectedTrack, "manual_quali", nextTop10);
+  };
+
+  const applyPresetGrid = (preset: "official" | "reverse" | "ferrari" | "redbull" | "mclaren" | "mercedes") =>
+  {
+    const official = DEFAULT_TOP10_BY_TRACK[selectedTrack] || DEFAULT_TOP10_BY_TRACK.monaco;
+    let nextTop10: string[];
+
+    if (preset === "official")
+    {
+      nextTop10 = [...official];
+    }
+    else if (preset === "reverse")
+    {
+      nextTop10 = [...manualTop10].reverse();
+    }
+    else if (preset === "ferrari")
+    {
+      nextTop10 = ["HAM", "LEC", ...official.filter((c) => c !== "HAM" && c !== "LEC")].slice(0, 10);
+    }
+    else if (preset === "redbull")
+    {
+      nextTop10 = ["VER", "HAD", ...official.filter((c) => c !== "VER" && c !== "HAD")].slice(0, 10);
+    }
+    else if (preset === "mclaren")
+    {
+      nextTop10 = ["NOR", "PIA", ...official.filter((c) => c !== "NOR" && c !== "PIA")].slice(0, 10);
+    }
+    else
+    {
+      nextTop10 = ["ANT", "RUS", ...official.filter((c) => c !== "ANT" && c !== "RUS")].slice(0, 10);
+    }
+
+    setManualTop10(nextTop10);
+    loadPrediction(selectedTrack, "manual_quali", nextTop10);
   };
 
   useEffect
   (
     () =>
     {
-      loadPrediction("monaco");
+      loadPrediction("monaco", "official_quali");
 
       fetch("/api/standings")
         .then((res) => res.json())
@@ -151,18 +315,18 @@ export default function Home()
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
             {tracks.map
             (
               (t) =>
               (
                 <button
                   key={t.id}
-                  onClick={() => loadPrediction(t.id)}
+                  onClick={() => handleTrackChange(t.id)}
                   className={`p-4 rounded-lg border text-left transition-all ${
                     selectedTrack === t.id
-                      ? "bg-zinc-900 border-[#E10600] shadow-lg shadow-red-950/20"
-                      : "bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-900 hover:border-zinc-700"
+                      ? "bg-zinc-900 border-[#E10600] shadow-sm"
+                      : "bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900/80 hover:border-zinc-700"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -176,30 +340,323 @@ export default function Home()
             )}
           </div>
 
+          {/* Qualifying Integration Controls */}
+          <div className="mb-6 p-3 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-lg bg-zinc-950 border border-zinc-800 text-xs">
+              <button
+                onClick={() => loadPrediction(selectedTrack, "without_quali")}
+                className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                  qualiMode === "without_quali"
+                    ? "bg-zinc-800 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                1. Without Qualifying (Race Pace)
+              </button>
+              <button
+                onClick={() => loadPrediction(selectedTrack, "official_quali")}
+                className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                  qualiMode === "official_quali"
+                    ? "bg-[#E10600] text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                2. Official Quali Grid
+              </button>
+              <button
+                onClick={() => loadPrediction(selectedTrack, "manual_quali", manualTop10)}
+                className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                  qualiMode === "manual_quali"
+                    ? "bg-zinc-800 text-white shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                3. Manual Grid Editor (Top 10)
+              </button>
+            </div>
+
+            <div className="text-xs text-zinc-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>
+                Mode: <span className="text-zinc-200 font-mono">{predictionData?.modeLabel || "Official Grid"}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Mode 1: Without Quali Info */}
+          {qualiMode === "without_quali" && (
+            <div className="mb-6 p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/90 text-xs text-zinc-300 flex items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-sky-400 shrink-0" />
+                <span>
+                  <strong className="text-white">Pre-Qualifying Mode:</strong> Predictions are computed purely from vehicle horsepower, downforce aerodynamic index, and 2026 driver form without starting grid bias.
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-zinc-500 shrink-0 hidden sm:inline">Grid Bias: 0%</span>
+            </div>
+          )}
+
+          {/* Mode 2: Official Quali Grid Banner */}
+          {qualiMode === "official_quali" && predictionData?.appliedGrid && (
+            <div className="mb-6 p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/90 text-xs">
+              <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-zinc-800/80">
+                <div className="font-semibold text-zinc-300 uppercase tracking-wider text-[11px] flex items-center gap-2">
+                  <Flag className="w-3.5 h-3.5 text-[#E10600]" />
+                  Official Saturday Qualifying Starting Order
+                </div>
+                <span className="text-zinc-500 font-mono text-[11px]">Official Q3 Times</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {predictionData.appliedGrid.slice(0, 5).map
+                (
+                  (entry) =>
+                  (
+                    <div key={entry.code} className="p-2.5 rounded bg-zinc-900/60 border border-zinc-800/80">
+                      <div className="flex items-center justify-between text-zinc-400 font-mono">
+                        <span className={`font-bold ${entry.pos === 1 ? "text-amber-400" : "text-zinc-300"}`}>P{entry.pos}</span>
+                        <span className="text-[10px] text-zinc-500">{entry.time || entry.gap}</span>
+                      </div>
+                      <div className="font-semibold text-white text-xs truncate mt-0.5">{entry.name}</div>
+                      <div className="text-[10px] text-zinc-400 truncate">{entry.team}</div>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Mode 3: Manual Grid Editor (Top 10 Starting Grid Configurator) */}
+          {qualiMode === "manual_quali" && (
+            <div className="mb-6 p-4 rounded-xl bg-zinc-950/70 border border-zinc-800/90 flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800/80 gap-2.5">
+                <div>
+                  <span className="font-semibold text-zinc-200 uppercase tracking-wider text-xs block">
+                    Top 10 Starting Grid Configurator (Q3 Shootout Grid)
+                  </span>
+                  <span className="text-zinc-500 text-[11px]">
+                    Customize starting positions for the top 10. Positions 11–23 adapt automatically.
+                  </span>
+                </div>
+
+                {/* Grid Presets */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500 uppercase mr-1 hidden sm:inline">Presets:</span>
+                  <button
+                    onClick={() => applyPresetGrid("official")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+                  >
+                    Official Grid
+                  </button>
+                  <button
+                    onClick={() => applyPresetGrid("reverse")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+                  >
+                    Reverse Top 10
+                  </button>
+                  <button
+                    onClick={() => applyPresetGrid("ferrari")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-red-900/60 text-red-400 hover:text-red-300 hover:border-red-600 transition-colors"
+                  >
+                    Ferrari 1-2
+                  </button>
+                  <button
+                    onClick={() => applyPresetGrid("redbull")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-blue-900/60 text-blue-400 hover:text-blue-300 hover:border-blue-600 transition-colors"
+                  >
+                    Red Bull 1-2
+                  </button>
+                  <button
+                    onClick={() => applyPresetGrid("mclaren")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-amber-900/60 text-amber-400 hover:text-amber-300 hover:border-amber-600 transition-colors"
+                  >
+                    McLaren 1-2
+                  </button>
+                  <button
+                    onClick={() => applyPresetGrid("mercedes")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-teal-900/60 text-teal-400 hover:text-teal-300 hover:border-teal-600 transition-colors"
+                  >
+                    Mercedes 1-2
+                  </button>
+                </div>
+              </div>
+
+              {/* 5 Rows (10 Starting Grid Slots) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map
+                (
+                  (idx) =>
+                  {
+                    const pos = idx + 1;
+                    const currentCode = manualTop10[idx] || ALL_2026_DRIVERS[idx]?.code || "VER";
+                    const rowNum = Math.floor(idx / 2) + 1;
+                    const side = idx % 2 === 0 ? "Left" : "Right";
+                    const isPole = pos === 1;
+
+                    return (
+                      <div
+                        key={pos}
+                        className={`p-3 rounded-lg border transition-all ${
+                          isPole
+                            ? "bg-zinc-900 border-[#E10600]/80 shadow-sm"
+                            : "bg-zinc-900/40 border-zinc-800/80"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className={`text-xs font-mono font-bold flex items-center gap-1.5 ${
+                            isPole ? "text-amber-400" : "text-zinc-300"
+                          }`}>
+                            <span className={`w-2 h-2 rounded-full ${isPole ? "bg-amber-400" : "bg-zinc-600"}`} />
+                            {isPole ? "P1 POLE POSITION" : `P${pos}`}
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-500">
+                            Row {rowNum} ({side})
+                          </span>
+                        </div>
+
+                        <select
+                          value={currentCode}
+                          onChange={(e) => handleTop10SlotChange(idx, e.target.value)}
+                          className="w-full bg-zinc-950 border border-zinc-700/80 text-white text-xs rounded px-2.5 py-1.5 outline-none focus:border-[#E10600] font-mono cursor-pointer"
+                        >
+                          {ALL_2026_DRIVERS.map
+                          (
+                            (d) =>
+                            (
+                              <option key={d.code} value={d.code}>
+                                {d.code} — {d.name} ({d.team})
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            </div>
+          )}
+
           {predictionData && (
-            <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-6 sm:p-8 backdrop-blur">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-6 sm:p-8">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between pb-6 mb-6 border-b border-zinc-800 gap-6">
                 <div>
-                  <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold block mb-1">
+                  <span className="text-xs uppercase tracking-wider text-zinc-500 font-semibold block mb-1">
                     Projected Race Winner
                   </span>
                   <div className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
                     {predictionData.predictedWinner}
                   </div>
-                  <div className="text-sm text-zinc-400 mt-1 font-medium">
-                    Constructor: <span className="text-zinc-200">{predictionData.winnerTeam}</span>
+                  <div className="text-sm text-zinc-400 mt-1">
+                    Team: <span className="text-white font-medium">{predictionData.winnerTeam}</span>
+                    {predictionData.runnerUp && (
+                      <span className="ml-3 text-zinc-500">
+                        • P2: <span className="text-zinc-300">{predictionData.runnerUp}</span>
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-6">
+                  {predictionData.poleConversionRate20Yr && (
+                    <div className="text-left lg:text-right hidden sm:block">
+                      <span className="text-xs uppercase tracking-wider text-zinc-500 block">Historic Pole Win Rate</span>
+                      <div className="text-xl sm:text-2xl font-bold text-zinc-300 font-mono">
+                        {predictionData.poleConversionRate20Yr}
+                      </div>
+                    </div>
+                  )}
                   <div className="text-left lg:text-right">
-                    <span className="text-xs uppercase tracking-wider text-zinc-500 block">Win Rate</span>
+                    <span className="text-xs uppercase tracking-wider text-zinc-500 block">Win Probability</span>
                     <div className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono">
                       {predictionData.winProbabilityPct}%
                     </div>
                   </div>
                 </div>
               </div>
+
+              {/* Projected Race Classification with 23 Drivers View Toggle */}
+              {predictionData.topDrivers && predictionData.topDrivers.length > 0 && (
+                <div className="mb-6 pb-6 border-b border-zinc-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">
+                      {showAllDrivers
+                        ? `Full 2026 Grid Projected Classification (${predictionData.allDrivers?.length || 23} Drivers)`
+                        : "Projected Top 5 Race Classification"}
+                    </div>
+                    <button
+                      onClick={() => setShowAllDrivers(!showAllDrivers)}
+                      className="text-xs font-mono font-medium text-zinc-300 hover:text-white px-3 py-1 rounded bg-zinc-900 border border-zinc-700 hover:border-zinc-500 transition-colors w-fit"
+                    >
+                      {showAllDrivers ? "Show Top 5 Only" : "View Full 23-Driver Grid →"}
+                    </button>
+                  </div>
+
+                  {!showAllDrivers ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                      {predictionData.topDrivers.map
+                      (
+                        (d, idx) =>
+                        (
+                          <div
+                            key={d.code}
+                            className={`p-3 rounded-lg border transition-all ${
+                              idx === 0
+                                ? "bg-zinc-900 border-[#E10600]/80 shadow-sm"
+                                : "bg-zinc-950/60 border-zinc-800/80"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+                              <span className={`font-bold font-mono ${idx === 0 ? "text-amber-400" : "text-zinc-300"}`}>P{idx + 1}</span>
+                              {qualiMode !== "without_quali" && (
+                                <span className="text-[10px] font-mono text-zinc-400">Grid: P{d.grid}</span>
+                              )}
+                            </div>
+                            <div className="font-bold text-white text-sm truncate">{d.name}</div>
+                            <div className="text-[11px] text-zinc-400 truncate">{d.team}</div>
+                            <div className="mt-2 text-right">
+                              <span className="text-xs font-mono font-bold text-emerald-400">{d.probPct}%</span>
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                      {(predictionData.allDrivers || predictionData.topDrivers).map
+                      (
+                        (d, idx) =>
+                        (
+                          <div
+                            key={d.code}
+                            className={`p-2.5 rounded-lg border transition-all ${
+                              idx === 0
+                                ? "bg-zinc-900 border-[#E10600]/80 shadow-sm"
+                                : "bg-zinc-950/60 border-zinc-800/80"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`font-bold font-mono ${idx === 0 ? "text-amber-400" : idx < 3 ? "text-zinc-200" : "text-zinc-500"}`}>
+                                  P{idx + 1}
+                                </span>
+                                <span className="font-bold text-white font-mono">{d.code}</span>
+                              </div>
+                              <span className="text-xs font-mono font-bold text-emerald-400">{d.probPct}%</span>
+                            </div>
+                            <div className="text-xs text-zinc-200 font-medium truncate">{d.name}</div>
+                            <div className="flex items-center justify-between text-[11px] text-zinc-500 mt-1">
+                              <span className="truncate">{d.team}</span>
+                              {qualiMode !== "without_quali" && (
+                                <span className="font-mono text-zinc-400 shrink-0">Grid: P{d.grid}</span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="p-4 rounded-lg bg-zinc-950/60 border border-zinc-800/80">
@@ -221,12 +678,116 @@ export default function Home()
 
               <div className="p-4 rounded-lg bg-zinc-950/40 border border-zinc-800/80">
                 <div className="text-xs font-semibold text-[#E10600] uppercase tracking-wider mb-1">
-                  Race Engineer Strategic Note
+                  Circuit Strategic Factor
                 </div>
                 <p className="text-sm text-zinc-300 leading-relaxed">
                   {predictionData.keyStrategicFactor}
                 </p>
               </div>
+
+              {/* Constructor Car Hierarchy & Track Suitability Analysis */}
+              {predictionData.constructorHierarchy && predictionData.constructorHierarchy.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-zinc-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                    <div>
+                      <div className="text-xs uppercase tracking-wider text-zinc-300 font-semibold flex items-center gap-2">
+                        <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                        Constructor Car Hierarchy & Track Suitability
+                      </div>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Assessing which constructor engineered the superior car for {tracks.find((t) => t.id === selectedTrack)?.name || "this circuit"}, factoring in long-run pace delta and mechanical DNF attrition.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => setShowConstructorHierarchy(!showConstructorHierarchy)}
+                      className="text-xs font-mono font-medium text-zinc-300 hover:text-white px-3 py-1 rounded bg-zinc-900 border border-zinc-700 hover:border-zinc-500 transition-colors w-fit shrink-0"
+                    >
+                      {showConstructorHierarchy ? "Collapse Full Matrix" : "View All 11 Constructors →"}
+                    </button>
+                  </div>
+
+                  {/* Best Car Spotlight Banner */}
+                  {predictionData.bestConstructor && (
+                    <div className="mb-4 p-3.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <span className="px-2 py-0.5 rounded font-black font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px]">
+                          #1 CAR RATED
+                        </span>
+                        <div>
+                          <span className="font-bold text-white text-sm">{predictionData.bestConstructor.team}</span>
+                          <span className="text-zinc-400 ml-2">— {predictionData.bestConstructor.trackVerdict}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 text-zinc-400 font-mono text-[11px]">
+                        <span>Rating: <strong className="text-emerald-400">{predictionData.bestConstructor.carSuitabilityScore}/100</strong></span>
+                        <span>Pace: <strong className="text-zinc-200">{predictionData.bestConstructor.paceDeltaPerLap}</strong></span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hierarchy Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {(showConstructorHierarchy
+                      ? predictionData.constructorHierarchy
+                      : predictionData.constructorHierarchy.slice(0, 6)
+                    ).map
+                    (
+                      (teamItem, rankIdx) =>
+                      {
+                        const isTop = rankIdx === 0;
+                        const isBackmarker = teamItem.tierNum === 3;
+
+                        return (
+                          <div
+                            key={teamItem.team}
+                            className={`p-3 rounded-lg border transition-all ${
+                              isTop
+                                ? "bg-zinc-900/90 border-emerald-500/40"
+                                : isBackmarker
+                                ? "bg-zinc-950/50 border-red-900/30"
+                                : "bg-zinc-950/60 border-zinc-800/80"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-xs font-mono font-bold ${
+                                  isTop ? "text-emerald-400" : isBackmarker ? "text-red-400" : "text-zinc-400"
+                                }`}>
+                                  #{rankIdx + 1}
+                                </span>
+                                <span className="font-bold text-white text-xs">{teamItem.team}</span>
+                              </div>
+
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold ${
+                                isTop
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                                  : isBackmarker
+                                  ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                                  : "bg-zinc-800 text-zinc-300 border border-zinc-700/60"
+                              }`}>
+                                {teamItem.tier.replace("Tier ", "T")}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1">
+                              <span>Rating: <strong className={isTop ? "text-emerald-400" : isBackmarker ? "text-red-400" : "text-zinc-200"}>{teamItem.carSuitabilityScore}/100</strong></span>
+                              <span>Pace: {teamItem.paceDeltaPerLap}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/50 mt-1">
+                              <span className="truncate max-w-[170px]">{teamItem.carDnaAdvantage}</span>
+                              <span className={`font-mono shrink-0 ${teamItem.dnfRatePct > 20 ? "text-red-400 font-bold" : "text-zinc-400"}`}>
+                                DNF: {teamItem.dnfRatePct}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -249,10 +810,10 @@ export default function Home()
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: "Apex Speed", value: telemetry ? `${telemetry.speed_kmh} km/h` : "349.6 km/h", sub: "Active Aero Low Drag" },
-              { label: "Engine RPM", value: telemetry ? `${telemetry.rpm.toLocaleString()} rpm` : "11,383 rpm", sub: `Gear ${telemetry?.gear || 8} • Full Throttle` },
-              { label: "Lateral Load", value: telemetry ? `${telemetry.g_force} G` : "5.5 G", sub: "Turn Entry Deceleration" },
-              { label: "Brake Caliper", value: telemetry ? `${telemetry.brake_temp_celsius} °C` : "840 °C", sub: "Carbon Composite Core" }
+              { label: "Apex Speed", value: telemetry?.speed_kmh ? `${telemetry.speed_kmh} km/h` : "349.6 km/h", sub: "Active Aero Low Drag" },
+              { label: "Engine RPM", value: telemetry?.rpm ? `${telemetry.rpm.toLocaleString()} rpm` : "11,383 rpm", sub: `Gear ${telemetry?.gear || 8} • Full Throttle` },
+              { label: "Lateral Load", value: telemetry?.g_force ? `${telemetry.g_force} G` : "5.5 G", sub: "Turn Entry Deceleration" },
+              { label: "Brake Caliper", value: telemetry?.brake_temp_celsius ? `${telemetry.brake_temp_celsius} °C` : "840 °C", sub: "Carbon Composite Core" }
             ].map
             (
               (item, i) =>
