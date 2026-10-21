@@ -1,0 +1,195 @@
+{
+  "shapes": [
+    {
+      "id": 1,
+      "type": "Table",
+      "details": {
+        "name": "TEAMS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "name" },
+          { "name": "full_team_name" },
+          { "name": "power_unit" },
+          { "name": "engine_manufacturer_id", "fk": true },
+          { "name": "color_hex" },
+          { "name": "championship_titles" }
+        ]
+      },
+      "x": 380,
+      "y": 140
+    },
+    {
+      "id": 2,
+      "type": "Table",
+      "details": {
+        "name": "DRIVERS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "team_id", "fk": true },
+          { "name": "code" },
+          { "name": "first_name" },
+          { "name": "last_name" },
+          { "name": "driver_number" },
+          { "name": "championship_points" },
+          { "name": "position" },
+          { "name": "career_wins" },
+          { "name": "podiums" }
+        ]
+      },
+      "x": 100,
+      "y": 140
+    },
+    {
+      "id": 3,
+      "type": "Table",
+      "details": {
+        "name": "CARS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "team_id", "fk": true },
+          { "name": "model_name" },
+          { "name": "season_year" },
+          { "name": "power_hp" },
+          { "name": "engine_supplier" },
+          { "name": "weight_kg" }
+        ]
+      },
+      "x": 680,
+      "y": 140
+    },
+    {
+      "id": 4,
+      "type": "Table",
+      "details": {
+        "name": "CIRCUITS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "name" },
+          { "name": "location" },
+          { "name": "country" },
+          { "name": "lap_length_km" },
+          { "name": "race_laps" },
+          { "name": "lap_record" },
+          { "name": "downforce_level" }
+        ]
+      },
+      "x": 380,
+      "y": 420
+    },
+    {
+      "id": 5,
+      "type": "Table",
+      "details": {
+        "name": "GRAND_PRIX_EVENTS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "circuit_id", "fk": true },
+          { "name": "season_year" },
+          { "name": "round_number" },
+          { "name": "official_event_name" },
+          { "name": "event_date" },
+          { "name": "weather_state" }
+        ]
+      },
+      "x": 680,
+      "y": 420
+    },
+    {
+      "id": 6,
+      "type": "Table",
+      "details": {
+        "name": "TELEMETRY_DATA",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "driver_id", "fk": true },
+          { "name": "circuit_id", "fk": true },
+          { "name": "lap_number" },
+          { "name": "speed_kmh" },
+          { "name": "rpm" },
+          { "name": "gear" },
+          { "name": "throttle_pct" },
+          { "name": "brake_pct" },
+          { "name": "active_aero_mode" },
+          { "name": "recorded_at" }
+        ]
+      },
+      "x": 100,
+      "y": 440
+    },
+    {
+      "id": 7,
+      "type": "Table",
+      "details": {
+        "name": "PIT_STOPS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "driver_id", "fk": true },
+          { "name": "circuit_id", "fk": true },
+          { "name": "lap" },
+          { "name": "duration_seconds" },
+          { "name": "stationary_time_seconds" },
+          { "name": "tyre_compound_from", "fk": true },
+          { "name": "tyre_compound_to", "fk": true }
+        ]
+      },
+      "x": 220,
+      "y": 720
+    },
+    {
+      "id": 8,
+      "type": "Table",
+      "details": {
+        "name": "TYRE_COMPOUNDS",
+        "fields": [
+          { "name": "id", "pk": true },
+          { "name": "compound_name" },
+          { "name": "compound_type" },
+          { "name": "color_hex" },
+          { "name": "grip_index" },
+          { "name": "durability_laps" }
+        ]
+      },
+      "x": 580,
+      "y": 720
+    }
+  ],
+  "connectors": [
+    {
+      "id": 101,
+      "destination": 1,
+      "source": 2
+    },
+    {
+      "id": 102,
+      "destination": 1,
+      "source": 3
+    },
+    {
+      "id": 103,
+      "destination": 2,
+      "source": 6
+    },
+    {
+      "id": 104,
+      "destination": 4,
+      "source": 6
+    },
+    {
+      "id": 105,
+      "destination": 4,
+      "source": 5
+    },
+    {
+      "id": 106,
+      "destination": 2,
+      "source": 7
+    },
+    {
+      "id": 107,
+      "destination": 8,
+      "source": 7
+    }
+  ],
+  "width": 1400,
+  "height": 1000
+}

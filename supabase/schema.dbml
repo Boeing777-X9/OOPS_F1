@@ -1,0 +1,164 @@
+// Formula 1 Apex RDBMS Schema (DBML)
+// Importable into dbdocs.io / dbdiagram.io / quickdbd
+
+Table regulation_eras {
+  id uuid [pk]
+  era_name varchar
+  start_year int
+  engine_formula varchar
+  chassis_weight_min_kg int
+  budget_cap_millions numeric
+}
+
+Table engine_manufacturers {
+  id uuid [pk]
+  name varchar [unique]
+  country varchar
+  mgu_k_spec varchar
+  sustainable_fuel_spec varchar
+}
+
+Table teams {
+  id uuid [pk]
+  name varchar [unique]
+  full_team_name varchar
+  engine_manufacturer_id uuid [ref: > engine_manufacturers.id]
+  base_city varchar
+  country varchar
+  team_principal varchar
+  power_unit varchar
+  championship_titles int
+  color_hex varchar
+}
+
+Table cars {
+  id uuid [pk]
+  team_id uuid [ref: > teams.id]
+  regulation_era_id uuid [ref: > regulation_eras.id]
+  model_name varchar
+  season_year int
+  power_hp int
+  engine_supplier varchar
+  downforce_efficiency_ratio numeric
+  weight_kg int
+}
+
+Table drivers {
+  id uuid [pk]
+  team_id uuid [ref: > teams.id]
+  first_name varchar
+  last_name varchar
+  driver_number int [unique]
+  code varchar(3) [unique]
+  country varchar
+  podiums int
+  career_wins int
+  championship_points int
+  position int
+}
+
+Table circuits {
+  id uuid [pk]
+  name varchar
+  location varchar
+  country varchar
+  lap_length_km numeric
+  race_laps int
+  lap_record varchar
+  lap_record_holder varchar
+  corners_count int
+  drs_zones int
+  downforce_level varchar
+}
+
+Table grand_prix_events {
+  id uuid [pk]
+  circuit_id uuid [ref: > circuits.id]
+  season_year int
+  round_number int
+  official_event_name varchar
+  event_date date
+  weather_state varchar
+}
+
+Table race_results {
+  id uuid [pk]
+  event_id uuid [ref: > grand_prix_events.id]
+  circuit_id uuid [ref: > circuits.id]
+  season_year int
+  winner_driver_id uuid [ref: > drivers.id]
+  winner_car_id uuid [ref: > cars.id]
+  pole_driver_id uuid [ref: > drivers.id]
+  fastest_lap_driver_id uuid [ref: > drivers.id]
+  fastest_lap_time varchar
+  total_race_time varchar
+}
+
+Table tyre_compounds {
+  id varchar [pk]
+  compound_name varchar
+  compound_type varchar
+  color_hex varchar
+  grip_index numeric
+  durability_laps int
+}
+
+Table pit_stops {
+  id uuid [pk]
+  driver_id uuid [ref: > drivers.id]
+  circuit_id uuid [ref: > circuits.id]
+  event_id uuid [ref: > grand_prix_events.id]
+  car_id uuid [ref: > cars.id]
+  lap int
+  duration_seconds numeric
+  tyre_compound_from varchar [ref: > tyre_compounds.id]
+  tyre_compound_to varchar [ref: > tyre_compounds.id]
+  stationary_time_seconds numeric
+}
+
+Table race_laps {
+  id uuid [pk]
+  event_id uuid [ref: > grand_prix_events.id]
+  driver_id uuid [ref: > drivers.id]
+  car_id uuid [ref: > cars.id]
+  lap_number int
+  position int
+  lap_time_seconds numeric
+  sector_1_seconds numeric
+  sector_2_seconds numeric
+  sector_3_seconds numeric
+  speed_trap_kmh numeric
+  tyre_compound varchar [ref: > tyre_compounds.id]
+  tyre_age_laps int
+}
+
+Table telemetry_data {
+  id uuid [pk]
+  event_id uuid [ref: > grand_prix_events.id]
+  driver_id uuid [ref: > drivers.id]
+  circuit_id uuid [ref: > circuits.id]
+  car_id uuid [ref: > cars.id]
+  lap_number int
+  speed_kmh numeric
+  rpm int
+  gear int
+  throttle_pct numeric
+  brake_pct numeric
+  g_force_lateral numeric
+  brake_temp_celsius int
+  drs_active boolean
+  active_aero_mode varchar
+  recorded_at timestamp
+}
+
+Table strategy_simulations {
+  id uuid [pk]
+  circuit_id uuid [ref: > circuits.id]
+  driver_id uuid [ref: > drivers.id]
+  stint_1_compound varchar [ref: > tyre_compounds.id]
+  stint_1_laps int
+  stint_2_compound varchar [ref: > tyre_compounds.id]
+  stint_2_laps int
+  predicted_total_time_seconds numeric
+  optimal_rank int
+}
