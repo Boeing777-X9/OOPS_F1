@@ -1,0 +1,161 @@
+{
+  "monaco": {
+    "circuit": "monaco",
+    "circuitName": "Circuit de Monaco",
+    "predictedWinner": "A.K. Antonelli",
+    "winnerTeam": "Mercedes",
+    "winProbabilityPct": 49.7,
+    "runnerUp": "G. Russell",
+    "runnerUpProbPct": 22.6,
+    "topDrivers": [
+      {
+        "name": "A.K. Antonelli",
+        "code": "ANT",
+        "team": "Mercedes",
+        "grid": 1,
+        "probPct": 49.7
+      },
+      {
+        "name": "G. Russell",
+        "code": "RUS",
+        "team": "Mercedes",
+        "grid": 2,
+        "probPct": 22.6
+      },
+      {
+        "name": "L. Hamilton",
+        "code": "HAM",
+        "team": "Ferrari",
+        "grid": 3,
+        "probPct": 12.4
+      },
+      {
+        "name": "M. Verstappen",
+        "code": "VER",
+        "team": "Red Bull",
+        "grid": 4,
+        "probPct": 7.0
+      },
+      {
+        "name": "C. Leclerc",
+        "code": "LEC",
+        "team": "Ferrari",
+        "grid": 5,
+        "probPct": 4.1
+      }
+    ],
+    "fastestLapDriver": "A.K. Antonelli",
+    "safetyCarProbabilityPct": 85.0,
+    "keyStrategicFactor": "20-year empirical data shows 56.0% of Monaco GP winners start from Pole. Overcut priority through Mirabeau.",
+    "recommendedCompoundSequence": "Medium (C4) -> Hard (C3)",
+    "pitStopsExpected": 1,
+    "trainingDataset": "20 Years Official FIA Historical Records (2004 - 2024)",
+    "poleConversionRate20Yr": "56.0%"
+  },
+  "silverstone": {
+    "circuit": "silverstone",
+    "circuitName": "Silverstone Circuit",
+    "predictedWinner": "A.K. Antonelli",
+    "winnerTeam": "Mercedes",
+    "winProbabilityPct": 39.4,
+    "runnerUp": "G. Russell",
+    "runnerUpProbPct": 21.4,
+    "topDrivers": [
+      {
+        "name": "A.K. Antonelli",
+        "code": "ANT",
+        "team": "Mercedes",
+        "grid": 1,
+        "probPct": 39.4
+      },
+      {
+        "name": "G. Russell",
+        "code": "RUS",
+        "team": "Mercedes",
+        "grid": 2,
+        "probPct": 21.4
+      },
+      {
+        "name": "L. Hamilton",
+        "code": "HAM",
+        "team": "Ferrari",
+        "grid": 3,
+        "probPct": 13.9
+      },
+      {
+        "name": "M. Verstappen",
+        "code": "VER",
+        "team": "Red Bull",
+        "grid": 4,
+        "probPct": 9.4
+      },
+      {
+        "name": "C. Leclerc",
+        "code": "LEC",
+        "team": "Ferrari",
+        "grid": 5,
+        "probPct": 6.6
+      }
+    ],
+    "fastestLapDriver": "M. Verstappen",
+    "safetyCarProbabilityPct": 52.0,
+    "keyStrategicFactor": "20-year empirical data shows 81.2% of British GP winners start in Top 2. High-speed Maggotts tire degradation.",
+    "recommendedCompoundSequence": "Medium (C2) -> Hard (C1) -> Soft (C3)",
+    "pitStopsExpected": 2,
+    "trainingDataset": "20 Years Official FIA Historical Records (2004 - 2024)",
+    "poleConversionRate20Yr": "37.5%"
+  },
+  "monza": {
+    "circuit": "monza",
+    "circuitName": "Autodromo Nazionale Monza",
+    "predictedWinner": "A.K. Antonelli",
+    "winnerTeam": "Mercedes",
+    "winProbabilityPct": 46.6,
+    "runnerUp": "G. Russell",
+    "runnerUpProbPct": 22.9,
+    "topDrivers": [
+      {
+        "name": "A.K. Antonelli",
+        "code": "ANT",
+        "team": "Mercedes",
+        "grid": 1,
+        "probPct": 46.6
+      },
+      {
+        "name": "G. Russell",
+        "code": "RUS",
+        "team": "Mercedes",
+        "grid": 2,
+        "probPct": 22.9
+      },
+      {
+        "name": "L. Hamilton",
+        "code": "HAM",
+        "team": "Ferrari",
+        "grid": 3,
+        "probPct": 13.4
+      },
+      {
+        "name": "M. Verstappen",
+        "code": "VER",
+        "team": "Red Bull",
+        "grid": 4,
+        "probPct": 6.8
+      },
+      {
+        "name": "C. Leclerc",
+        "code": "LEC",
+        "team": "Ferrari",
+        "grid": 5,
+        "probPct": 5.2
+      }
+    ],
+    "fastestLapDriver": "M. Verstappen",
+    "safetyCarProbabilityPct": 38.0,
+    "keyStrategicFactor": "20-year empirical data shows 56.0% of Italian GP winners start in Top 2. Low-drag slipstream yields 264+ km/h average speed.",
+    "recommendedCompoundSequence": "Soft (C4) -> Hard (C3)",
+    "pitStopsExpected": 1,
+    "trainingDataset": "20 Years Official FIA Historical Records (2004 - 2024)",
+    "poleConversionRate20Yr": "48.0%"
+  }
+}
