@@ -38,6 +38,18 @@ const FALLBACK_CIRCUITS: Circuit[] = [
     lap_record_holder: "Rubens Barrichello",
     scheduled_date: "2026-09-06",
     status: "Scheduled"
+  },
+  {
+    id: "c4",
+    name: "Circuit of the Americas",
+    location: "Austin, Texas",
+    country: "United States",
+    lap_length_km: 5.513,
+    race_laps: 56,
+    lap_record: "1:36.169",
+    lap_record_holder: "Charles Leclerc",
+    scheduled_date: "2026-10-18",
+    status: "Scheduled"
   }
 ];
 

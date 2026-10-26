@@ -12,7 +12,7 @@ interface TopDriverPrediction
 
 interface PredictionPayload
 {
-  circuit: "monaco" | "silverstone" | "monza";
+  circuit: "monaco" | "silverstone" | "monza" | "cota";
   predictedWinner: string;
   winnerTeam: string;
   winProbabilityPct: number;
@@ -33,7 +33,7 @@ import { runLiveMLInference, QualiMode } from "@/lib/f1InferenceModel";
 export async function GET(request: Request)
 {
   const { searchParams } = new URL(request.url);
-  const track = (searchParams.get("track") || "monaco").toLowerCase() as "monaco" | "silverstone" | "monza";
+  const track = (searchParams.get("track") || "monaco").toLowerCase() as "monaco" | "silverstone" | "monza" | "cota";
   const rain = searchParams.get("rain") === "true";
   const modeParam = searchParams.get("mode") as QualiMode | null;
   const qualiMode: QualiMode = (modeParam === "without_quali" || modeParam === "manual_quali")

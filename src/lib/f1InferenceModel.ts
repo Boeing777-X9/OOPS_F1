@@ -1,4 +1,18 @@
+import TRAINED_ML_WEIGHTS from "@/data/trained_ml_weights.json";
+
 export type QualiMode = "without_quali" | "official_quali" | "manual_quali";
+
+export interface MLModelMetrics
+{
+  architecture: string;
+  trainingDataset: string;
+  samplesTrained: number;
+  rocAucScore: number;
+  accuracyPct: number;
+  brierScore: number;
+  featureImportances: Record<string, number>;
+  learnedWeights: Record<string, number>;
+}
 
 export interface DriverInput
 {
@@ -12,7 +26,7 @@ export interface DriverInput
 
 export interface CircuitInput
 {
-  id: "monaco" | "silverstone" | "monza";
+  id: "monaco" | "silverstone" | "monza" | "cota";
   name: string;
   poleWinRate: number; // e.g. 0.56
   frontRowWinRate: number; // e.g. 0.68
@@ -21,6 +35,44 @@ export interface CircuitInput
   recommendedCompound: string;
   pitStops: number;
   strategicNote: string;
+}
+
+export interface CircuitPhysics
+{
+  totalLaps: number;
+  baseLapTimeSeconds: number;
+  deltaToPass: number;
+  overtakingDifficulty: string;
+  pitLossGreenSeconds: number;
+  pitLossSCSeconds: number;
+  safetyCarProbabilityPct: number;
+  vscProbabilityPct: number;
+  tyreWearFactor: number;
+  tyreDegradationIndex: "Low (Pavement Smooth)" | "High (Lateral Gs)" | "Medium (Braking Load)";
+}
+
+export interface TyreStrategyPlan
+{
+  primarySequence: string;
+  pitWindowLaps: string;
+  undercutAdvantageSeconds: string;
+  plannedPitStops: number;
+  tyreWearAssessment: string;
+}
+
+export interface TeammateBattle
+{
+  team: string;
+  driver1: {
+    code: string;
+    name: string;
+    headToHeadWinPct: number;
+  };
+  driver2: {
+    code: string;
+    name: string;
+    headToHeadWinPct: number;
+  };
 }
 
 export interface QualiGridEntry
@@ -45,36 +97,42 @@ export interface ConstructorTrackAssessment
   trackVerdict: string; // e.g. "Best car for Monaco street circuit"
 }
 
+export interface SimulationDriverResult
+{
+  name: string;
+  code: string;
+  team: string;
+  grid: number;
+  probPct: number;
+  podiumProbPct: number;
+  pointsProbPct: number;
+  expectedPos: number;
+  dnfProbPct: number;
+  fastestLapProbPct: number;
+  rawScore: number;
+}
+
 export interface MLInferenceResult
 {
-  circuit: "monaco" | "silverstone" | "monza";
+  circuit: "monaco" | "silverstone" | "monza" | "cota";
   circuitName: string;
   qualiMode: QualiMode;
   modeLabel: string;
   appliedGrid: QualiGridEntry[];
   bestConstructor: ConstructorTrackAssessment;
   constructorHierarchy: ConstructorTrackAssessment[];
+  mlModel: MLModelMetrics;
+  circuitPhysics: CircuitPhysics;
+  tyreStrategy: TyreStrategyPlan;
+  teammateBattles: TeammateBattle[];
+  monteCarloRuns: number;
   predictedWinner: string;
   winnerTeam: string;
   winProbabilityPct: number;
   runnerUp: string;
   runnerUpProbPct: number;
-  topDrivers: Array<{
-    name: string;
-    code: string;
-    team: string;
-    grid: number;
-    probPct: number;
-    rawScore: number;
-  }>;
-  allDrivers: Array<{
-    name: string;
-    code: string;
-    team: string;
-    grid: number;
-    probPct: number;
-    rawScore: number;
-  }>;
+  topDrivers: SimulationDriverResult[];
+  allDrivers: SimulationDriverResult[];
   fastestLapDriver: string;
   safetyCarProbabilityPct: number;
   keyStrategicFactor: string;
@@ -119,6 +177,99 @@ export const CIRCUITS_MODEL_CONFIG: Record<string, CircuitInput> = {
     recommendedCompound: "Soft (C4) -> Hard (C3)",
     pitStops: 1,
     strategicNote: "20-year Monza empirical data proves straight-line slipstream & low-drag rear wing trim yield 264+ km/h average speed."
+  },
+  cota: {
+    id: "cota",
+    name: "Circuit of the Americas",
+    poleWinRate: 0.417,
+    frontRowWinRate: 0.750,
+    downforceFactor: 1.25,
+    safetyCarLikelihood: 48.0,
+    recommendedCompound: "Medium (C3) -> Hard (C2) -> Hard (C2)",
+    pitStops: 2,
+    strategicNote: "Austin COTA Free Practice (FP1/FP2/FP3) data reveals severe lateral thermal tyre degradation through Sector 1 esses, dictating a mandatory 2-stop Medium-Hard-Hard strategy."
+  }
+};
+
+export const CIRCUITS_PHYSICS: Record<string, CircuitPhysics> = {
+  monaco: {
+    totalLaps: 78,
+    baseLapTimeSeconds: 72.5,
+    deltaToPass: 2.45,
+    overtakingDifficulty: "Extreme (Street Track Bottleneck)",
+    pitLossGreenSeconds: 22.5,
+    pitLossSCSeconds: 13.0,
+    safetyCarProbabilityPct: 85.0,
+    vscProbabilityPct: 65.0,
+    tyreWearFactor: 0.65,
+    tyreDegradationIndex: "Low (Pavement Smooth)"
+  },
+  silverstone: {
+    totalLaps: 52,
+    baseLapTimeSeconds: 88.5,
+    deltaToPass: 0.85,
+    overtakingDifficulty: "Moderate (High-Speed DRS Zones)",
+    pitLossGreenSeconds: 21.8,
+    pitLossSCSeconds: 13.2,
+    safetyCarProbabilityPct: 52.0,
+    vscProbabilityPct: 45.0,
+    tyreWearFactor: 1.45,
+    tyreDegradationIndex: "High (Lateral Gs)"
+  },
+  monza: {
+    totalLaps: 53,
+    baseLapTimeSeconds: 81.0,
+    deltaToPass: 0.42,
+    overtakingDifficulty: "High (Low-Drag Slipstream Trains)",
+    pitLossGreenSeconds: 24.2,
+    pitLossSCSeconds: 14.5,
+    safetyCarProbabilityPct: 38.0,
+    vscProbabilityPct: 32.0,
+    tyreWearFactor: 0.90,
+    tyreDegradationIndex: "Medium (Braking Load)"
+  },
+  cota: {
+    totalLaps: 56,
+    baseLapTimeSeconds: 94.5,
+    deltaToPass: 0.72,
+    overtakingDifficulty: "Moderate (Long Back-Straight DRS)",
+    pitLossGreenSeconds: 20.5,
+    pitLossSCSeconds: 12.0,
+    safetyCarProbabilityPct: 48.0,
+    vscProbabilityPct: 40.0,
+    tyreWearFactor: 1.35,
+    tyreDegradationIndex: "High (Lateral Gs)"
+  }
+};
+
+export const CIRCUITS_TYRE_STRATEGY: Record<string, TyreStrategyPlan> = {
+  monaco: {
+    primarySequence: "Medium (C4) -> Hard (C3)",
+    pitWindowLaps: "Laps 24 - 32",
+    undercutAdvantageSeconds: "+1.85s (Decisive Track Position)",
+    plannedPitStops: 1,
+    tyreWearAssessment: "Minimal thermal wear; track position dictates stopping under SC/VSC window."
+  },
+  silverstone: {
+    primarySequence: "Medium (C2) -> Hard (C1) -> Soft (C3)",
+    pitWindowLaps: "Stop 1: Laps 16-22 | Stop 2: Laps 36-42",
+    undercutAdvantageSeconds: "+2.10s (High Degradation Offset)",
+    plannedPitStops: 2,
+    tyreWearAssessment: "Extreme lateral Gs through Copse/Becketts force 2 stops to prevent blistering."
+  },
+  monza: {
+    primarySequence: "Soft (C4) -> Hard (C3)",
+    pitWindowLaps: "Laps 20 - 26",
+    undercutAdvantageSeconds: "+1.20s (Moderate, Slipstream Offset)",
+    plannedPitStops: 1,
+    tyreWearAssessment: "Long straights promote surface cooling; low downforce limits thermal tyre wear."
+  },
+  cota: {
+    primarySequence: "Medium (C3) -> Hard (C2) -> Hard (C2)",
+    pitWindowLaps: "Stop 1: Laps 14-19 | Stop 2: Laps 34-39",
+    undercutAdvantageSeconds: "+2.25s (High Deg Offset)",
+    plannedPitStops: 2,
+    tyreWearAssessment: "Austin Free Practice (FP1/FP2) telemetry indicates severe thermal degradation in S1 esses, forcing an aggressive 2-stop strategy."
   }
 };
 
@@ -158,6 +309,18 @@ export const OFFICIAL_QUALI_DATA: Record<string, QualiGridEntry[]> = {
     { pos: 8, code: "HUL", name: "N. Hülkenberg", team: "Audi", time: "1:19.820", gap: "+0.430" },
     { pos: 9, code: "HAD", name: "I. Hadjar", team: "Red Bull", time: "1:19.910", gap: "+0.520" },
     { pos: 10, code: "COL", name: "F. Colapinto", team: "Alpine", time: "1:20.040", gap: "+0.650" }
+  ],
+  cota: [
+    { pos: 1, code: "ANT", name: "A.K. Antonelli", team: "Mercedes", time: "1:34.035", gap: "POLE" },
+    { pos: 2, code: "VER", name: "M. Verstappen", team: "Red Bull", time: "1:34.214", gap: "+0.179" },
+    { pos: 3, code: "HAD", name: "I. Hadjar", team: "Red Bull", time: "1:34.250", gap: "+0.215" },
+    { pos: 4, code: "LEC", name: "C. Leclerc", team: "Ferrari", time: "1:34.267", gap: "+0.232" },
+    { pos: 5, code: "HAM", name: "L. Hamilton", team: "Ferrari", time: "1:34.311", gap: "+0.276" },
+    { pos: 6, code: "RUS", name: "G. Russell", team: "Mercedes", time: "1:34.476", gap: "+0.441" },
+    { pos: 7, code: "PIA", name: "O. Piastri", team: "McLaren", time: "1:34.803", gap: "+0.768" },
+    { pos: 8, code: "NOR", name: "L. Norris", team: "McLaren", time: "1:35.049", gap: "+1.014" },
+    { pos: 9, code: "LAW", name: "L. Lawson", team: "RB", time: "No Time", gap: "Q3 DNF" },
+    { pos: 10, code: "GAS", name: "P. Gasly", team: "Alpine", time: "1:35.080", gap: "+1.045" }
   ]
 };
 
@@ -184,15 +347,16 @@ export const DRIVERS_GRID_2026: DriverInput[] = [
   { code: "TSU", name: "Y. Tsunoda", team: "RB", points: 1, grid: 20, carHp: 1030 },
   { code: "STR", name: "L. Stroll", team: "Aston Martin", points: 0, grid: 21, carHp: 1042 },
   { code: "BOT", name: "V. Bottas", team: "Cadillac", points: 0, grid: 22, carHp: 1030 },
-  { code: "PER", name: "S. Pérez", team: "Cadillac", points: 0, grid: 23, carHp: 1030 }
+  { code: "PER", name: "S. Pérez", team: "Cadillac", points: 0, grid: 23, carHp: 1030 },
+  { code: "MAG", name: "K. Magnussen", team: "Haas", points: 14, grid: 9, carHp: 1032 }
 ];
 
 export interface ConstructorProfile
 {
   tier: 1 | 2 | 3;
-  basePaceIndex: number; // 1.0 = Benchmark Tier 1 (Mercedes/Ferrari/Red Bull), down to 0.16 (Cadillac)
-  dnfRatePct: number; // Empirical DNF failure percentage (Cadillac 42%, Aston Martin 34%, Tier 1 ~5%)
-  racePaceDeltaPerLap: number; // Lap time deficit vs race winner
+  basePaceIndex: number;
+  dnfRatePct: number;
+  racePaceDeltaPerLap: number;
 }
 
 export const CONSTRUCTOR_PROFILES: Record<string, ConstructorProfile> = {
@@ -240,7 +404,7 @@ export const CONSTRUCTOR_TRACK_MATRIX: Record<string, Record<string, Constructor
     "Red Bull": { team: "Red Bull", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 99, paceDeltaPerLap: "Benchmark (0.00s)", dnfRatePct: 5.0, carDnaAdvantage: "Unmatched low-drag aerodynamic efficiency & top speed", trackVerdict: "Rated #1 Car at Monza (Speed Trap King: 354+ km/h)" },
     Ferrari: { team: "Ferrari", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 98, paceDeltaPerLap: "+0.02s", dnfRatePct: 5.0, carDnaAdvantage: "Monza low-drag wing spec & peak ICE deployment", trackVerdict: "Co-Favorite (Tifosi home-soil power boost)" },
     Mercedes: { team: "Mercedes", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 94, paceDeltaPerLap: "+0.08s", dnfRatePct: 4.5, carDnaAdvantage: "High top-end horsepower & braking stability", trackVerdict: "Frontrunner (Podium Contender)" },
-    McLaren: { team: "McLaren", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 92, paceDeltaPerLap: "+0.12s", dnfRatePct: 5.2, carDnaAdvantage: "Strong chicane curb hopping, but slightly draggier", trackVerdict: "Frontrunner (Slipstream reliant)" },
+    McLaren: { team: "McLaren", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 97, paceDeltaPerLap: "+0.03s", dnfRatePct: 5.2, carDnaAdvantage: "Front-row qualifying trim & chicane rotation", trackVerdict: "Co-Favorite (Monza Frontrunner)" },
     Williams: { team: "Williams", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 72, paceDeltaPerLap: "+0.70s", dnfRatePct: 18.0, carDnaAdvantage: "Slippery low-drag chassis missile", trackVerdict: "Best Midfield Package for Monza (Top-6 threat)" },
     Alpine: { team: "Alpine", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 58, paceDeltaPerLap: "+1.05s", dnfRatePct: 14.0, carDnaAdvantage: "Renault power unit top-speed limit", trackVerdict: "Vulnerable on long Curva Grande straights" },
     RB: { team: "RB", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 56, paceDeltaPerLap: "+1.10s", dnfRatePct: 15.0, carDnaAdvantage: "Honda power unit top end", trackVerdict: "Points scrapper in DRS trains" },
@@ -248,17 +412,43 @@ export const CONSTRUCTOR_TRACK_MATRIX: Record<string, Record<string, Constructor
     Audi: { team: "Audi", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 46, paceDeltaPerLap: "+1.35s", dnfRatePct: 17.0, carDnaAdvantage: "Engine clipping issues on long straights", trackVerdict: "Bottom of midfield" },
     "Aston Martin": { team: "Aston Martin", tier: "Backmarker / High Attrition", tierNum: 3, carSuitabilityScore: 28, paceDeltaPerLap: "+2.05s", dnfRatePct: 34.0, carDnaAdvantage: "Severe drag penalty & cooling vulnerability", trackVerdict: "High DNF attrition, chronic retirement risk" },
     Cadillac: { team: "Cadillac", tier: "Backmarker / High Attrition", tierNum: 3, carSuitabilityScore: 16, paceDeltaPerLap: "+2.45s", dnfRatePct: 42.0, carDnaAdvantage: "-14 km/h speed trap deficit", trackVerdict: "Backmarker: Severe straight-line deficit" }
+  },
+  cota: {
+    Ferrari: { team: "Ferrari", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 98, paceDeltaPerLap: "Benchmark (0.00s)", dnfRatePct: 5.0, carDnaAdvantage: "Traction out of slow hairpins & kerb compliance in stadium", trackVerdict: "Rated #1 Car at Austin COTA (Dominant FP Long-Run Pace)" },
+    McLaren: { team: "McLaren", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 98, paceDeltaPerLap: "+0.02s", dnfRatePct: 5.2, carDnaAdvantage: "High-speed downforce through Sector 1 esses (Turns 3-6)", trackVerdict: "Co-Favorite (Sector 1 practice benchmark)" },
+    "Red Bull": { team: "Red Bull", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 95, paceDeltaPerLap: "+0.06s", dnfRatePct: 5.0, carDnaAdvantage: "High top speed on 1.2km back straight and Turn 1 climb", trackVerdict: "Frontrunner (Verstappen strong COTA pedigree)" },
+    Mercedes: { team: "Mercedes", tier: "Tier 1 Pacesetter", tierNum: 1, carSuitabilityScore: 92, paceDeltaPerLap: "+0.12s", dnfRatePct: 4.5, carDnaAdvantage: "Heavy-braking stability into Turn 1 & Turn 12", trackVerdict: "Podium contender (Consistent long-run pace)" },
+    Williams: { team: "Williams", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 62, paceDeltaPerLap: "+0.95s", dnfRatePct: 16.0, carDnaAdvantage: "Low aerodynamic drag down COTA back straight", trackVerdict: "Points threat via straight-line speed" },
+    Alpine: { team: "Alpine", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 60, paceDeltaPerLap: "+1.00s", dnfRatePct: 14.0, carDnaAdvantage: "Balanced mid-speed mechanical compliance", trackVerdict: "Midfield points scorer" },
+    RB: { team: "RB", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 58, paceDeltaPerLap: "+1.05s", dnfRatePct: 15.0, carDnaAdvantage: "Agile rotation in technical final sector", trackVerdict: "Points contender if clean qualifying" },
+    Haas: { team: "Haas", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 56, paceDeltaPerLap: "+1.15s", dnfRatePct: 16.5, carDnaAdvantage: "American home race motivation & Ferrari power", trackVerdict: "Competitive in midfield DRS battles" },
+    Audi: { team: "Audi", tier: "Tier 2 Midfield", tierNum: 2, carSuitabilityScore: 52, paceDeltaPerLap: "+1.25s", dnfRatePct: 17.0, carDnaAdvantage: "Solid gearbox packaging", trackVerdict: "Bumpiness causes slight floor instability" },
+    "Aston Martin": { team: "Aston Martin", tier: "Backmarker / High Attrition", tierNum: 3, carSuitabilityScore: 30, paceDeltaPerLap: "+1.95s", dnfRatePct: 34.0, carDnaAdvantage: "Severe high-speed snaps in Turn 3-6 esses", trackVerdict: "High DNF attrition, tire overheating" },
+    Cadillac: { team: "Cadillac", tier: "Backmarker / High Attrition", tierNum: 3, carSuitabilityScore: 20, paceDeltaPerLap: "+2.35s", dnfRatePct: 42.0, carDnaAdvantage: "American home crowd support, heavy chassis", trackVerdict: "Backmarker: Severe pace delta & high DNF rate" }
   }
 };
 
+function parsePaceDelta(deltaStr: string): number
+{
+  if (deltaStr.includes("Benchmark"))
+  {
+    return 0.0;
+  }
+  const clean = deltaStr.replace("+", "").replace("s", "").trim();
+  const val = parseFloat(clean);
+  return isNaN(val) ? 1.2 : val;
+}
+
 export function runLiveMLInference(
-  trackKey: "monaco" | "silverstone" | "monza",
+  trackKey: "monaco" | "silverstone" | "monza" | "cota",
   qualiMode: QualiMode = "official_quali",
   customGrid?: Record<string, number>,
   weatherRain: boolean = false
 ): MLInferenceResult
 {
   const circuit = CIRCUITS_MODEL_CONFIG[trackKey] || CIRCUITS_MODEL_CONFIG.monaco;
+  const circuitPhysics = CIRCUITS_PHYSICS[trackKey] || CIRCUITS_PHYSICS.monaco;
+  const tyreStrategy = CIRCUITS_TYRE_STRATEGY[trackKey] || CIRCUITS_TYRE_STRATEGY.monaco;
   const officialGrid = OFFICIAL_QUALI_DATA[trackKey] || OFFICIAL_QUALI_DATA.monaco;
 
   // Build grid map based on selected qualification mode
@@ -266,7 +456,6 @@ export function runLiveMLInference(
 
   if (qualiMode === "official_quali")
   {
-    // Apply official Saturday qualifying results
     officialGrid.forEach
     (
       (entry) =>
@@ -275,21 +464,20 @@ export function runLiveMLInference(
       }
     );
 
-    // Fallback for rest of grid
+    let nextAvailablePos = Math.max(...officialGrid.map((e) => e.pos), 0) + 1;
     DRIVERS_GRID_2026.forEach
     (
       (d) =>
       {
         if (!gridPositionMap.has(d.code))
         {
-          gridPositionMap.set(d.code, d.grid);
+          gridPositionMap.set(d.code, nextAvailablePos++);
         }
       }
     );
   }
   else if (qualiMode === "manual_quali")
   {
-    // Apply user custom grid
     if (customGrid)
     {
       Object.entries(customGrid).forEach
@@ -301,7 +489,6 @@ export function runLiveMLInference(
       );
     }
 
-    // Fill in drivers without explicit manual slot
     let nextAvailablePos = Math.max(...Array.from(gridPositionMap.values()), 0) + 1;
     DRIVERS_GRID_2026.forEach
     (
@@ -316,8 +503,7 @@ export function runLiveMLInference(
   }
   else
   {
-    // without_quali: No qualifying grid exists yet (Pre-Quali Race Pace mode)
-    // Grid positions remain unassigned/neutral (1)
+    // without_quali: neutral race-pace starting order
     DRIVERS_GRID_2026.forEach
     (
       (d) =>
@@ -327,14 +513,31 @@ export function runLiveMLInference(
     );
   }
 
-  // Softmax logistic scoring vector incorporating track-specific constructor bias & empirical DNF rates
-  const scoredDrivers = DRIVERS_GRID_2026.map
+  // Pre-calculate driver attributes and race pace coefficients
+  interface DriverSimulationParams
+  {
+    code: string;
+    name: string;
+    team: string;
+    grid: number;
+    points: number;
+    carSuitabilityScore: number;
+    paceDeltaNumeric: number;
+    dnfRatePct: number;
+    rawScore: number;
+  }
+
+  const driverParams: DriverSimulationParams[] = DRIVERS_GRID_2026.map
   (
     (driver) =>
     {
       const gridPos = gridPositionMap.get(driver.code) ?? 1;
-      const trackAss = CONSTRUCTOR_TRACK_MATRIX[trackKey]?.[driver.team] || {
-        team: driver.team,
+      const officialEntry = (qualiMode === "official_quali")
+        ? officialGrid.find((o) => o.code === driver.code)
+        : undefined;
+      const effectiveTeam = officialEntry?.team || driver.team;
+      const trackAss = CONSTRUCTOR_TRACK_MATRIX[trackKey]?.[effectiveTeam] || {
+        team: effectiveTeam,
         tier: "Tier 2 Midfield" as const,
         tierNum: 2 as const,
         carSuitabilityScore: 50,
@@ -344,18 +547,26 @@ export function runLiveMLInference(
         trackVerdict: "Midfield"
       };
 
-      // Feature 1: Track-Specific Constructor Performance Rating & Car DNA Bias (0 to 100 scale)
-      // Tier 1 pacesetter (98/100) gets +1.72! Midfield (55/100) gets 0.00. Backmarkers (16-20/100) get -1.55!
+      const paceDeltaNumeric = parsePaceDelta(trackAss.paceDeltaPerLap);
       const trackCarBias = ((trackAss.carSuitabilityScore - 55.0) / 25.0) * 1.25;
-
-      // Feature 2: Driver Momentum & Championship Points Form
       const formWeight = (driver.points / 340.0) * (qualiMode === "without_quali" ? 1.65 : 1.05);
-
-      // Feature 3: Powertrain Horsepower advantage
       const hpWeight = ((driver.carHp - 1030) / 25.0) * 0.35;
 
-      // Feature 4: Grid Position Advantage Scaled by Car Capability
-      // A Tier 1 car on Pole has high conversion. A Tier 3 car (Cadillac, Aston Martin) will be overtaken due to pace delta.
+      // Evaluate ML logistic probability learned by scikit-learn
+      const weights = TRAINED_ML_WEIGHTS.learned_logistic_weights.weights;
+      const intercept = TRAINED_ML_WEIGHTS.learned_logistic_weights.intercept;
+      const mlLogit = intercept
+        + (weights["Starting Grid Position"] * (gridPos))
+        + (weights["Front Row Qualification"] * (gridPos <= 2 ? 1.0 : 0.0))
+        + (weights["Chassis Pace Delta (s/lap)"] * paceDeltaNumeric)
+        + (weights["Mechanical Reliability Risk"] * (trackAss.dnfRatePct / 100.0))
+        + (weights["Circuit Passing Bottleneck"] * circuitPhysics.deltaToPass)
+        + (weights["Historic Pole Conversion Rate"] * circuit.poleWinRate)
+        + (weights["Driver Championship Form"] * (driver.points / 340.0))
+        + (weights["Wet Weather Track Condition"] * (weatherRain ? 1.0 : 0.0));
+
+      const mlCalibratedProb = Math.round((1.0 / (1.0 + Math.exp(-mlLogit))) * 1000) / 10;
+
       let gridAdvantage = 0;
       if (qualiMode !== "without_quali")
       {
@@ -366,73 +577,370 @@ export function runLiveMLInference(
         gridAdvantage = frontRowBonus + gridDecay;
       }
 
-      // Feature 5: Empirical Mechanical Reliability & DNF Penalty
-      // If team has high DNF rate (e.g. Cadillac 42%, Aston Martin 34%), mechanical retirement penalty is heavy
       const finishProbability = 1.0 - (trackAss.dnfRatePct / 100.0);
       const reliabilityScore = Math.log(Math.max(0.1, finishProbability));
-
-      // Feature 6: Wet condition chaos equalizer (if rain)
       const rainFactor = weatherRain ? ((Math.random() - 0.5) * 1.2) : 0;
 
       const rawScore = 0.5 + trackCarBias + formWeight + hpWeight + gridAdvantage + reliabilityScore + rainFactor;
-      let expVal = Math.exp(Math.max(-10, Math.min(10, rawScore)));
-
-      // Hard safety multiplier by finish probability
-      expVal *= finishProbability;
 
       return {
-        name: driver.name,
         code: driver.code,
+        name: driver.name,
         team: driver.team,
         grid: gridPos,
-        tier: trackAss.tierNum,
+        points: driver.points,
+        carSuitabilityScore: trackAss.carSuitabilityScore,
+        paceDeltaNumeric,
         dnfRatePct: trackAss.dnfRatePct,
-        rawScore: Math.round(rawScore * 100) / 100,
-        expVal
+        rawScore: mlCalibratedProb
       };
     }
   );
 
-  const totalExp = scoredDrivers.reduce((acc, d) => acc + d.expVal, 0);
+  // 10,000-Iteration Monte Carlo Race Simulation
+  const MONTE_CARLO_RUNS = 10000;
+  const winsCount: Record<string, number> = {};
+  const podiumCount: Record<string, number> = {};
+  const pointsCount: Record<string, number> = {};
+  const sumPositions: Record<string, number> = {};
+  const dnfCount: Record<string, number> = {};
+  const fastestLapCount: Record<string, number> = {};
 
-  const ranked = scoredDrivers
-    .map
-    (
-      (d) =>
+  // Teammate Head-to-Head win counters: key = "DRIVER_A:DRIVER_B"
+  const h2hWins: Record<string, number> = {};
+
+  driverParams.forEach
+  (
+    (d) =>
+    {
+      winsCount[d.code] = 0;
+      podiumCount[d.code] = 0;
+      pointsCount[d.code] = 0;
+      sumPositions[d.code] = 0;
+      dnfCount[d.code] = 0;
+      fastestLapCount[d.code] = 0;
+    }
+  );
+
+  const laps = circuitPhysics.totalLaps;
+  const deltaToPass = circuitPhysics.deltaToPass;
+  const pitLossGreen = circuitPhysics.pitLossGreenSeconds;
+  const pitLossSC = circuitPhysics.pitLossSCSeconds;
+
+  for (let run = 0; run < MONTE_CARLO_RUNS; run++)
+  {
+    // Stochastic Safety Car deployment roll
+    const scDeployed = Math.random() < (circuitPhysics.safetyCarProbabilityPct / 100.0);
+    const scLap = scDeployed ? Math.floor(Math.random() * (laps * 0.6)) + 15 : -1;
+
+    // Track position / Turn 1 lead battle dynamic (scoped per race run)
+    const poleDriver = driverParams.find((o) => o.grid === 1);
+    const poleCarPace = poleDriver ? poleDriver.paceDeltaNumeric : 0;
+    const p2TakesTurn1Lead = (poleCarPace > 0.8) ? (Math.random() < 0.75) : (Math.random() < 0.28);
+    const heroicDefenseStint = Math.random() < 0.38;
+
+    let bestLapTimeInRun = 999999;
+    let bestLapDriverCode = driverParams[0].code;
+
+    interface DriverSimOutcome
+    {
+      code: string;
+      didDnf: boolean;
+      retireLap: number;
+      totalRaceTime: number;
+    }
+
+    const simResults: DriverSimOutcome[] = [];
+
+    for (let i = 0; i < driverParams.length; i++)
+    {
+      const d = driverParams[i];
+
+      // DNF stochastic check
+      const dnfChance = weatherRain ? Math.min(0.85, (d.dnfRatePct * 1.35) / 100.0) : (d.dnfRatePct / 100.0);
+      if (Math.random() < dnfChance)
+      {
+        const retireLap = Math.floor(Math.random() * laps) + 1;
+        dnfCount[d.code]++;
+        simResults.push
+        (
+          {
+            code: d.code,
+            didDnf: true,
+            retireLap,
+            totalRaceTime: 99999999
+          }
+        );
+        continue;
+      }
+
+      // Clean Air & Track Position Dynamics
+      // Front row starters (P1/P2) run in pristine undisturbed airflow, saving tyre tread and keeping 100% aero downforce.
+      const isLeadingRun = (d.grid === 2 && p2TakesTurn1Lead) || (d.grid === 1 && !p2TakesTurn1Lead);
+      const cleanAirBonus = isLeadingRun ? 0.65 : (d.grid <= 2 ? 0.55 : d.grid <= 4 ? 0.25 : 0.0);
+      const effectivePaceDelta = Math.max(0, d.paceDeltaNumeric - cleanAirBonus);
+
+      // Base lap pace including chassis pace delta and driver capability offset
+      const driverSkillOffset = ((340 - d.points) / 340.0) * 0.08;
+      const tyreWearPenalty = (circuitPhysics.tyreWearFactor - 1.0) * 0.08;
+      const pacePerLap = circuitPhysics.baseLapTimeSeconds + effectivePaceDelta + driverSkillOffset + tyreWearPenalty;
+
+      // Simulated fastest lap attempt in late stint
+      const simulatedBestLap = pacePerLap - 1.8 + (Math.random() * 0.4);
+      if (simulatedBestLap < bestLapTimeInRun)
+      {
+        bestLapTimeInRun = simulatedBestLap;
+        bestLapDriverCode = d.code;
+      }
+
+      // Grid position delay & traffic dirty air effect
+      let gridTrafficDelay = 0;
+      if (qualiMode !== "without_quali")
+      {
+        // Initial grid launch & reaction time delay (0.60s per position)
+        gridTrafficDelay += (d.grid - 1) * 0.60;
+
+        // In-pack traffic & dirty air fighting penalty:
+        // Cars starting in the pack (P3+) lose time battling other cars in dirty air
+        if (!isLeadingRun && d.grid >= 3)
+        {
+          gridTrafficDelay += Math.min(6.0, (d.grid - 2) * 0.45);
+        }
+
+        // Bottleneck passing resistance:
+        // In F1, passing requires exceeding the circuit deltaToPass.
+        // If cars ahead have track position, trailing faster cars are held in dirty air.
+        if (!isLeadingRun)
+        {
+          const carsAhead = driverParams.filter((other) => other.grid < d.grid);
+          if (carsAhead.length > 0)
+          {
+            const relevantCarsAhead = (p2TakesTurn1Lead && poleCarPace > 0.8)
+              ? carsAhead.filter((other) => other.grid !== 1)
+              : carsAhead;
+
+            if (relevantCarsAhead.length > 0)
+            {
+              const slowestAhead = Math.max(...relevantCarsAhead.map((o) => o.paceDeltaNumeric));
+              const paceSurplus = slowestAhead - d.paceDeltaNumeric;
+              if (paceSurplus > 0)
+              {
+                if (circuitPhysics.deltaToPass >= 2.0)
+                {
+                  // Monaco: Overtaking on track is virtually impossible
+                  gridTrafficDelay += (paceSurplus * (laps * 0.92));
+                }
+                else if (paceSurplus < circuitPhysics.deltaToPass)
+                {
+                  // Insufficient delta to overtake on track -> trapped until pit window (55% of race distance)
+                  const lapsTrapped = Math.floor(laps * 0.55);
+                  gridTrafficDelay += (paceSurplus * lapsTrapped) + 2.5;
+                }
+                else
+                {
+                  // Pace advantage exceeds deltaToPass -> passes after 8-10 laps
+                  gridTrafficDelay += (circuitPhysics.deltaToPass * 8.5);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Race leader pace control bonus
+      let raceControlBonus = 0;
+      if (isLeadingRun)
+      {
+        // Front runner controls the race tempo and dictation of the stint
+        raceControlBonus = heroicDefenseStint ? 12.0 : 6.5;
+      }
+
+      // Pit Stop Loss calculation with Safety Car discount
+      let pitLoss = (tyreStrategy.plannedPitStops * pitLossGreen);
+      if (scDeployed)
+      {
+        // Front-runners have prime pit entry access under Safety Car
+        if (isLeadingRun && Math.random() < 0.75)
+        {
+          pitLoss -= (pitLossGreen - pitLossSC);
+        }
+        else if (d.grid <= 4 && Math.random() < 0.45)
+        {
+          pitLoss -= (pitLossGreen - pitLossSC);
+        }
+        else if (Math.random() < 0.20)
+        {
+          pitLoss -= (pitLossGreen - pitLossSC);
+        }
+      }
+
+      // Undercut / tire variation jitter
+      const tireExecutionJitter = (Math.random() + Math.random() - 1.0) * 2.5;
+
+      const totalRaceTime = (laps * pacePerLap) + gridTrafficDelay - raceControlBonus + pitLoss + tireExecutionJitter;
+
+      simResults.push
       (
         {
-          name: d.name,
           code: d.code,
-          team: d.team,
-          grid: d.grid,
-          rawScore: d.rawScore,
-          probPct: Math.round((d.expVal / totalExp) * 1000) / 10
+          didDnf: false,
+          retireLap: laps,
+          totalRaceTime
         }
-      )
-    )
-    .sort((a, b) => b.probPct - a.probPct);
+      );
+    }
 
-  const winner = ranked[0];
-  const runnerUp = ranked[1];
+    // Sort: classified finishers by totalRaceTime ascending, followed by DNFs by retireLap descending
+    simResults.sort
+    (
+      (a, b) =>
+      {
+        if (!a.didDnf && !b.didDnf)
+        {
+          return a.totalRaceTime - b.totalRaceTime;
+        }
+        if (!a.didDnf && b.didDnf)
+        {
+          return -1;
+        }
+        if (a.didDnf && !b.didDnf)
+        {
+          return 1;
+        }
+        return b.retireLap - a.retireLap;
+      }
+    );
+
+    // Record finishing statistics
+    fastestLapCount[bestLapDriverCode]++;
+
+    for (let pos = 0; pos < simResults.length; pos++)
+    {
+      const entry = simResults[pos];
+      sumPositions[entry.code] += (pos + 1);
+
+      if (pos === 0)
+      {
+        winsCount[entry.code]++;
+      }
+      if (pos < 3)
+      {
+        podiumCount[entry.code]++;
+      }
+      if (pos < 10)
+      {
+        pointsCount[entry.code]++;
+      }
+    }
+
+    // Record teammate head-to-head outcomes for this race
+    const resultMap = new Map<string, number>();
+    simResults.forEach((r, idx) => resultMap.set(r.code, idx + 1));
+
+    // Group drivers by team to compare teammates
+    const teamGroups: Record<string, string[]> = {};
+    driverParams.forEach
+    (
+      (d) =>
+      {
+        if (!teamGroups[d.team])
+        {
+          teamGroups[d.team] = [];
+        }
+        teamGroups[d.team].push(d.code);
+      }
+    );
+
+    Object.values(teamGroups).forEach
+    (
+      (codes) =>
+      {
+        if (codes.length >= 2)
+        {
+          const c1 = codes[0];
+          const c2 = codes[1];
+          const p1 = resultMap.get(c1) ?? 99;
+          const p2 = resultMap.get(c2) ?? 99;
+          const key1 = `${c1}:${c2}`;
+          const key2 = `${c2}:${c1}`;
+
+          if (p1 < p2)
+          {
+            h2hWins[key1] = (h2hWins[key1] || 0) + 1;
+          }
+          else
+          {
+            h2hWins[key2] = (h2hWins[key2] || 0) + 1;
+          }
+        }
+      }
+    );
+  }
+
+  // Compile full Driver Results
+  const rankedDrivers: SimulationDriverResult[] = driverParams.map
+  (
+    (d) =>
+    {
+      const winPct = Math.round((winsCount[d.code] / MONTE_CARLO_RUNS) * 1000) / 10;
+      const podiumPct = Math.round((podiumCount[d.code] / MONTE_CARLO_RUNS) * 1000) / 10;
+      const pointsPct = Math.round((pointsCount[d.code] / MONTE_CARLO_RUNS) * 1000) / 10;
+      const expPos = Math.round((sumPositions[d.code] / MONTE_CARLO_RUNS) * 10) / 10;
+      const dnfPct = Math.round((dnfCount[d.code] / MONTE_CARLO_RUNS) * 1000) / 10;
+      const fastLapPct = Math.round((fastestLapCount[d.code] / MONTE_CARLO_RUNS) * 1000) / 10;
+
+      return {
+        name: d.name,
+        code: d.code,
+        team: d.team,
+        grid: d.grid,
+        probPct: winPct,
+        podiumProbPct: podiumPct,
+        pointsProbPct: pointsPct,
+        expectedPos: expPos,
+        dnfProbPct: dnfPct,
+        fastestLapProbPct: fastLapPct,
+        rawScore: d.rawScore
+      };
+    }
+  ).sort
+  (
+    (a, b) =>
+    {
+      if (b.probPct > 15.0 || a.probPct > 15.0)
+      {
+        if (Math.abs(b.probPct - a.probPct) > 10.0)
+        {
+          return b.probPct - a.probPct;
+        }
+      }
+      return a.expectedPos - b.expectedPos;
+    }
+  );
+
+  const winner = rankedDrivers[0];
+  const runnerUp = rankedDrivers[1];
 
   // Resolve applied grid list for transparency
-  const appliedGridList: QualiGridEntry[] = DRIVERS_GRID_2026
-    .map
-    (
-      (d) =>
-      (
-        {
-          pos: gridPositionMap.get(d.code) ?? 1,
-          code: d.code,
-          name: d.name,
-          team: d.team,
-          time: officialGrid.find((o) => o.code === d.code)?.time,
-          gap: officialGrid.find((o) => o.code === d.code)?.gap
-        }
-      )
-    )
-    .sort((a, b) => a.pos - b.pos)
-    .slice(0, 10);
+  const appliedGridList: QualiGridEntry[] = (qualiMode === "official_quali")
+    ? officialGrid
+    : DRIVERS_GRID_2026
+        .map
+        (
+          (d) =>
+          (
+            {
+              pos: gridPositionMap.get(d.code) ?? 1,
+              code: d.code,
+              name: d.name,
+              team: d.team,
+              time: officialGrid.find((o) => o.code === d.code)?.time,
+              gap: officialGrid.find((o) => o.code === d.code)?.gap
+            }
+          )
+        )
+        .sort((a, b) => a.pos - b.pos)
+        .slice(0, 10);
 
   const modeLabels: Record<QualiMode, string> = {
     without_quali: "Pre-Qualifying (Chassis Race Pace & Team Form)",
@@ -447,6 +955,50 @@ export function runLiveMLInference(
 
   const bestConstructor = constructorHierarchy[0];
 
+  // Build Teammate Battles
+  const teammateBattles: TeammateBattle[] = [];
+  const handledTeams = new Set<string>();
+
+  driverParams.forEach
+  (
+    (d) =>
+    {
+      if (handledTeams.has(d.team))
+      {
+        return;
+      }
+      const teammates = driverParams.filter((x) => x.team === d.team);
+      if (teammates.length >= 2)
+      {
+        handledTeams.add(d.team);
+        const t1 = teammates[0];
+        const t2 = teammates[1];
+        const key1 = `${t1.code}:${t2.code}`;
+        const key2 = `${t2.code}:${t1.code}`;
+        const wins1 = h2hWins[key1] || 0;
+        const wins2 = h2hWins[key2] || 0;
+        const total = wins1 + wins2 || 1;
+
+        teammateBattles.push
+        (
+          {
+            team: d.team,
+            driver1: {
+              code: t1.code,
+              name: t1.name,
+              headToHeadWinPct: Math.round((wins1 / total) * 1000) / 10
+            },
+            driver2: {
+              code: t2.code,
+              name: t2.name,
+              headToHeadWinPct: Math.round((wins2 / total) * 1000) / 10
+            }
+          }
+        );
+      }
+    }
+  );
+
   return {
     circuit: trackKey,
     circuitName: circuit.name,
@@ -455,15 +1007,33 @@ export function runLiveMLInference(
     appliedGrid: appliedGridList,
     bestConstructor,
     constructorHierarchy,
+    mlModel: {
+      architecture: TRAINED_ML_WEIGHTS.model_architecture,
+      trainingDataset: TRAINED_ML_WEIGHTS.training_dataset,
+      samplesTrained: TRAINED_ML_WEIGHTS.samples_trained,
+      rocAucScore: TRAINED_ML_WEIGHTS.cross_val_metrics.gbdt_roc_auc,
+      accuracyPct: TRAINED_ML_WEIGHTS.cross_val_metrics.top1_accuracy_pct,
+      brierScore: TRAINED_ML_WEIGHTS.cross_val_metrics.brier_score,
+      featureImportances: TRAINED_ML_WEIGHTS.feature_importances,
+      learnedWeights: TRAINED_ML_WEIGHTS.learned_logistic_weights.weights
+    },
+    circuitPhysics,
+    tyreStrategy,
+    teammateBattles,
+    monteCarloRuns: MONTE_CARLO_RUNS,
     predictedWinner: winner.name,
     winnerTeam: winner.team,
     winProbabilityPct: winner.probPct,
     runnerUp: runnerUp.name,
     runnerUpProbPct: runnerUp.probPct,
-    topDrivers: ranked.slice(0, 5),
-    allDrivers: ranked,
-    fastestLapDriver: trackKey === "monaco" ? "A.K. Antonelli" : (ranked[2]?.name || "M. Verstappen"),
-    safetyCarProbabilityPct: weatherRain ? 98.0 : circuit.safetyCarLikelihood,
+    topDrivers: rankedDrivers.slice(0, 5),
+    allDrivers: rankedDrivers,
+    fastestLapDriver: (() =>
+    {
+      const mostFastLaps = [...rankedDrivers].sort((a, b) => b.fastestLapProbPct - a.fastestLapProbPct)[0];
+      return mostFastLaps?.name || winner.name;
+    })(),
+    safetyCarProbabilityPct: weatherRain ? 98.0 : circuitPhysics.safetyCarProbabilityPct,
     keyStrategicFactor: (() =>
     {
       let note = circuit.strategicNote;
@@ -472,7 +1042,7 @@ export function runLiveMLInference(
 
       if (polePerf && polePerf.tierNum === 3)
       {
-        note += ` Reliability & Attrition Factor: ${poleDriver?.team} suffers an empirical ${polePerf.dnfRatePct}% mechanical retirement rate and ${polePerf.paceDeltaPerLap} deficit, making defense against Tier 1 constructors over full race distance statistically unviable.`;
+        note += ` Reliability & Attrition Factor: ${poleDriver?.team} suffers an empirical ${polePerf.dnfRatePct}% mechanical retirement rate and ${polePerf.paceDeltaPerLap} deficit, making defense against Tier 1 constructors over full race distance statistically unviable in our 10,000-run Monte Carlo engine.`;
       }
       else if (polePerf && polePerf.tierNum === 2)
       {
@@ -480,11 +1050,11 @@ export function runLiveMLInference(
       }
       return note;
     })(),
-    recommendedCompoundSequence: weatherRain ? "Intermediate -> Full Wet" : circuit.recommendedCompound,
-    pitStopsExpected: weatherRain ? 3 : circuit.pitStops,
-    trainingDataset: "20 Years Official FIA Historical Records (2004 - 2024)",
+    recommendedCompoundSequence: weatherRain ? "Intermediate -> Full Wet" : tyreStrategy.primarySequence,
+    pitStopsExpected: weatherRain ? 3 : tyreStrategy.plannedPitStops,
+    trainingDataset: "20 Years Official FIA Historical Records (2004 - 2024) + 10,000 Monte Carlo Iterations",
     poleConversionRate20Yr: `${Math.round(circuit.poleWinRate * 100)}%`,
-    modelVersion: "Apex-ML-Softmax-v2.6",
+    modelVersion: "Apex-ML-MonteCarlo-v3.0",
     calculatedAt: new Date().toISOString()
   };
 }
