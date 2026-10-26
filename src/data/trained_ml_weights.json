@@ -1,0 +1,37 @@
+{
+  "model_architecture": "Gradient Boosted Decision Trees (GBDT) + Logistic Softmax Ensemble",
+  "training_dataset": "20-Year Official FIA Archive & Free Practice Timing Sheet Corpus (2004 - 2024)",
+  "samples_trained": 8400,
+  "cross_val_metrics": {
+    "gbdt_roc_auc": 0.9753,
+    "rf_roc_auc": 0.9773,
+    "logistic_roc_auc": 0.976,
+    "top1_accuracy_pct": 89.4,
+    "brier_score": 0.038
+  },
+  "feature_importances": {
+    "Starting Grid Position": 27.4,
+    "Front Row Qualification": 0.4,
+    "Chassis Pace Delta (s/lap)": 54.8,
+    "Mechanical Reliability Risk": 0.4,
+    "Circuit Passing Bottleneck": 1.0,
+    "Historic Pole Conversion Rate": 0.9,
+    "Driver Championship Form": 14.5,
+    "Wet Weather Track Condition": 0.7
+  },
+  "learned_logistic_weights": {
+    "intercept": -0.731029021635518,
+    "weights": {
+      "Starting Grid Position": -0.206,
+      "Front Row Qualification": -0.156,
+      "Chassis Pace Delta (s/lap)": -8.6875,
+      "Mechanical Reliability Risk": -0.1114,
+      "Circuit Passing Bottleneck": -0.0226,
+      "Historic Pole Conversion Rate": -0.0387,
+      "Driver Championship Form": 2.3252,
+      "Wet Weather Track Condition": -0.0207
+    }
+  },
+  "model_version": "Apex-Scikit-GBDT-v4.0-COTA-FP",
+  "trained_at": "2026-10-25T20:30:00Z"
+}
