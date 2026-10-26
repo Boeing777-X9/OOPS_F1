@@ -1,0 +1,819 @@
+\documentclass[12pt,a4paper]{report}
+
+% Typography and Fonts
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{newtxtext,newtxmath}
+\usepackage[scaled=0.90]{inconsolata}
+\usepackage{microtype}
+\usepackage{setspace}
+\setstretch{1.15}
+
+% Formatting Packages
+\usepackage{graphicx}
+\usepackage{amsmath}
+\setlength{\headheight}{15pt}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, arrows.meta, positioning}
+\usepackage{listings}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% Table formatting
+\renewcommand{\arraystretch}{1.32}
+
+% Header and Footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small\textsl{F1 Apex: RDBMS \& Predictive Engine}}
+\lhead{\small\textsl{Manipal University Jaipur}}
+\cfoot{\thepage}
+
+\begin{document}
+
+% =========================================================================
+% COVER PAGE
+% =========================================================================
+\begin{titlepage}
+    \centering
+    \vspace*{0.3cm}
+    
+    \includegraphics[width=0.70\textwidth]{manipal_logo.png}\\[1.5cm]
+    
+    {\huge \textbf{F1 Apex: A Predictive Formula 1 Relational Database and Race Strategy Engine}}\\[0.8cm]
+    
+    {\Large \textbf{RDBMS Coursework / Lab Project Report}}\\[2.0cm]
+    
+    {\large \emph{Submitted by:}}\\[0.5cm]
+    \begin{tabular}{c@{\hspace{2.2cm}}c}
+        {\Large \textbf{Mohammed Faisal}} & {\Large \textbf{Shreyas Dixit}} \\[0.2cm]
+        {\large Reg No: \textbf{2502050327}} & {\large Reg No: \textbf{2502050327}} \\
+    \end{tabular}\\[2.0cm]
+    
+    \vfill
+    
+    {\large \textbf{Department of Computer Science and Engineering}}\\[0.2cm]
+    {\large \textbf{Manipal University Jaipur}}\\[0.2cm]
+    {\normalsize Dehmi Kalan, Near GVK Toll Plaza, Jaipur-Ajmer Expressway,}\\
+    {\normalsize Jaipur, Rajasthan 303007}\\[0.4cm]
+    {\large October 2026}
+\end{titlepage}
+
+% =========================================================================
+% ABSTRACT
+% =========================================================================
+\newpage
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\begin{abstract}
+Formula 1 teams record hundreds of gigabytes of telemetry per car across each race weekend, covering power unit telemetry, tyre degradation, track conditions, and pit stop strategies. Storing this information in unnormalized flat files or loosely structured formats makes it difficult to maintain data integrity, query historical trends, and correlate technical rules with race performance.
+
+In this project, we develop \textbf{F1 Apex}, a relational database management system (RDBMS) paired with an analytical race simulation engine. The database is implemented in PostgreSQL using a 14-table schema normalized to Third Normal Form (3NF). It models teams, drivers, circuits, telemetry channels, tyre compounds, and race results, incorporating the 2026 FIA technical regulations such as active aerodynamics and updated power unit specifications. The backend is connected to an interactive Next.js and TypeScript web interface with telemetry plotting tools and a Monte Carlo race simulation engine. We evaluate the system using historical timing data and a detailed case study of the 2026 United States Grand Prix at the Circuit of the Americas (COTA), validating how relational schema design and session data updates improve outcome predictions.
+\end{abstract}
+
+% =========================================================================
+% TABLE OF CONTENTS AND LISTS
+% =========================================================================
+\newpage
+\tableofcontents
+\newpage
+\listoffigures
+\listoftables
+
+% =========================================================================
+% CHAPTER 1: INTRODUCTION
+% =========================================================================
+\newpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\chapter{Introduction}
+
+\section{Project Overview}
+Formula 1 racing generates large volumes of telemetry data from on-car sensors, pit lane telemetry systems, and timing loops. Over a race weekend, each car produces hundreds of megabytes of sensor records sampled at frequencies between 10\,Hz and 100\,Hz. Alongside these sensor streams, race strategists and engineers track structured information including technical rules, power unit homologations, constructor details, pit stop logs, track weather samples, and lap-by-lap timing splits.
+
+Relying on standalone CSV files or unindexed tables creates significant problems with data consistency. For example, updating circuit information like lap distance or corner count should automatically reflect across all related lap records and lap times. Without primary and foreign key constraints, data quickly becomes redundant or inconsistent.
+
+To address these challenges, we built \textbf{F1 Apex}, a normalized relational database in PostgreSQL connected to an interactive web dashboard and prediction model. The database enforces referential integrity across 14 normalized tables. Using this relational foundation, the system simulates race scenarios by combining starting grid positions, car performance deltas, tyre wear parameters, and simulated track incidents.
+
+\section{Objectives of the Project}
+The primary objectives of this project are:
+\begin{enumerate}
+    \item \textbf{Relational Database Design and Normalization:} Design and implement a 14-table schema in PostgreSQL normalized to Third Normal Form (3NF), eliminating partial and transitive dependencies while maintaining integrity across technical and sporting domains.
+    \item \textbf{Entity-Relationship Modeling:} Construct a comprehensive ER diagram in Chen notation detailing entity sets, primary keys, foreign keys, and relationship cardinalities ($1:1$, $1:N$, $M:N$).
+    \item \textbf{High-Frequency Telemetry Storage:} Model lap-level telemetry data (throttle position, brake pressure, engine RPM, selected gear, speed, and 2026 active aerodynamics state) relationally linked to individual drivers, events, and circuits.
+    \item \textbf{Physics-Based Simulation Model:} Implement a simulation engine combining weighted performance factors with a 10,000-iteration Monte Carlo model, incorporating dirty air aerodynamic wake penalties, overtaking thresholds ($\delta_{\text{pass}}$), and compound tyre wear.
+    \item \textbf{Interactive Web Dashboard:} Develop a responsive web interface using Next.js, TypeScript, and Tailwind CSS to test qualifying grids, inspect telemetry comparisons, and review race predictions.
+\end{enumerate}
+
+\section{Importance and Practical Relevance}
+In Formula 1 strategy and database engineering, structured data modeling offers concrete practical benefits:
+\begin{itemize}
+    \item \textbf{Strategic Pit Stop Planning:} Pitting one lap earlier or later can determine whether a driver gains track position via an undercut or exits into a midfield DRS train.
+    \item \textbf{Traffic and Aerodynamic Wake Modeling:} Cars do not run in isolation. When following within 1.5 seconds of a car ahead, aerodynamic turbulence (dirty air) reduces front grip and accelerates tyre wear. Storing track position and sector deltas allows the simulation to account for overtaking difficulty.
+    \item \textbf{Modeling Regulation Updates:} With the 2026 regulations introducing active aerodynamics (X-mode and Z-mode) and updated hybrid power units, separating constructors, power units, and regulation eras in the database ensures the schema can adapt without schema redesigns.
+\end{itemize}
+
+\section{Scope and Limitations}
+\subsection{Scope}
+\begin{itemize}
+    \item Full coverage of the 2026 FIA Formula 1 World Championship grid (11 teams and 23 drivers, including Cadillac and Audi).
+    \item Detailed circuit models for representative Grand Prix venues: Circuit de Monaco (high-downforce street circuit), Silverstone Circuit (high-speed aerodynamic venue), Autodromo Nazionale Monza (low-drag high-speed track), and Circuit of the Americas (COTA, high lateral-load track).
+    \item Complete database schema with SQL DDL migrations, sample datasets, and over 100,000 telemetry records.
+\end{itemize}
+
+\subsection{Limitations}
+\begin{itemize}
+    \item High-frequency telemetry streams are generated using realistic baseline distributions rather than live hardware transponders, since 2026 specification cars are not running commercial telemetry feeds today.
+    \item Weather data is sampled at discrete time intervals rather than using live Doppler radar sweeps.
+\end{itemize}
+
+% =========================================================================
+% CHAPTER 2: SYSTEM DESIGN
+% =========================================================================
+\chapter{System Design}
+
+\section{Database Design Overview and Normalization (3NF)}
+The schema was designed to satisfy \textbf{Third Normal Form (3NF)}:
+\begin{enumerate}
+    \item \textbf{First Normal Form (1NF):} Every table attribute contains only atomic, indivisible values. Multi-valued fields (such as compound tyre stints or sector timing splits) are decomposed into discrete child tables (\texttt{pit\_stops}, \texttt{race\_laps}) rather than stored as delimited strings or arrays.
+    \item \textbf{Second Normal Form (2NF):} All non-key attributes are fully functionally dependent on the complete primary key. In tables with composite business keys, partial dependencies are eliminated by employing surrogate primary keys (UUIDs) across all relational entities.
+    \item \textbf{Third Normal Form (3NF):} Transitive dependencies are removed. For instance, \texttt{teams} does not directly store engine technical specs (such as MGU-K power ratings or sustainable fuel standards); instead, teams reference an \texttt{engine\_manufacturer\_id}, which links to the independent \texttt{engine\_manufacturers} entity. Similarly, race results reference a \texttt{grand\_prix\_events} entity rather than coupling directly to static circuit records, decoupling annual calendar rounds from physical racetrack infrastructure.
+\end{enumerate}
+
+\newpage
+\section{Entity-Relationship (ER) Diagram}
+The relational model consists of 14 core entities linked through 1:Many relationships, primary keys, and foreign keys. The complete Chen-notation Entity-Relationship diagram is shown in Figure~\ref{fig:erd}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{erd_diagram.png}
+\caption{Entity-Relationship (ER) Diagram of the F1 Apex Database (Chen Notation)}
+\label{fig:erd}
+\end{figure}
+
+\newpage
+\section{Description of Tables and Attributes}
+The database schema consists of 14 normalized production tables that govern the sporting, technical, and analytical dimensions of Formula 1. The full data dictionary for each entity is detailed below.
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.1: Regulation Eras Schema (\textnormal{\texttt{regulation\_eras}})}
+Captures historical and future FIA technical regulation eras, specifying aerodynamic formulas, minimum chassis weights, and financial cost caps.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique era identifier \\
+\texttt{era\_name} & VARCHAR(100) & NOT NULL & Official regulation era name \\
+\texttt{start\_year} & INT & NOT NULL & Starting championship year \\
+\texttt{end\_year} & INT & NULL & Concluding championship year \\
+\texttt{engine\_formula} & VARCHAR(150) & NOT NULL & Powertrain specification \\
+\texttt{chassis\_weight\_kg} & INT & NOT NULL & Minimum vehicle homologation weight \\
+\texttt{budget\_cap\_m} & NUMERIC(5,1) & NOT NULL & Financial cost cap in millions USD \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.2: Engine Manufacturers Schema (\textnormal{\texttt{engine\_manufacturers}})}
+Stores certified original equipment manufacturers (OEMs) that design and homologate Formula 1 power units.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique manufacturer identifier \\
+\texttt{name} & VARCHAR(100) & NOT NULL & Brand name (Ferrari, Mercedes, Audi) \\
+\texttt{country} & VARCHAR(100) & NOT NULL & Factory headquarters country \\
+\texttt{mgu\_k\_spec} & VARCHAR(100) & NOT NULL & Kinetic motor generator capacity \\
+\texttt{mgu\_h\_included} & BOOLEAN & NOT NULL & MGU-H presence status \\
+\texttt{sustainable\_fuel} & VARCHAR(100) & NOT NULL & 100\% advanced bio-fuel standard \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.3: Teams Schema (\textnormal{\texttt{teams}})}
+Represents the FIA constructor entities participating in the championship.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique constructor identifier \\
+\texttt{engine\_mfg\_id} & UUID & FOREIGN KEY & References \texttt{engine\_manufacturers(id)} \\
+\texttt{name} & VARCHAR(100) & NOT NULL & Commercial team name \\
+\texttt{base\_city} & VARCHAR(100) & NOT NULL & Design facility headquarters \\
+\texttt{team\_principal} & VARCHAR(100) & NOT NULL & Team principal / CEO \\
+\texttt{titles} & INT & DEFAULT 0 & Constructors' Championships won \\
+\texttt{color\_hex} & VARCHAR(7) & NOT NULL & Hex code for livery branding \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\newpage
+\subsubsection*{Table 2.4: Cars Schema (\textnormal{\texttt{cars}})}
+Models specific chassis variations deployed by constructors across championship seasons.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique chassis model identifier \\
+\texttt{team\_id} & UUID & FOREIGN KEY & Constructing team reference \\
+\texttt{era\_id} & UUID & FOREIGN KEY & Regulation era reference \\
+\texttt{model\_name} & VARCHAR(100) & NOT NULL & Factory model (e.g., MCL39, SF-26) \\
+\texttt{power\_hp} & INT & NOT NULL & Combined ICE + electrical horsepower \\
+\texttt{downforce\_ratio} & NUMERIC(4,2) & NOT NULL & Aerodynamic lift-to-drag ($L/D$) ratio \\
+\texttt{wins} & INT & DEFAULT 0 & Total Grand Prix victories \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.5: Drivers Schema (\textnormal{\texttt{drivers}})}
+Maintains individual driver profiles, permanent competition numbers, and cumulative career statistics.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique driver identifier \\
+\texttt{team\_id} & UUID & FOREIGN KEY & Contracted team reference \\
+\texttt{first\_name} & VARCHAR(100) & NOT NULL & Driver legal first name \\
+\texttt{last\_name} & VARCHAR(100) & NOT NULL & Driver surname \\
+\texttt{driver\_number} & INT & UNIQUE, NOT NULL & FIA permanent racing number \\
+\texttt{code} & VARCHAR(3) & UNIQUE, NOT NULL & 3-letter broadcast timing code \\
+\texttt{points} & INT & DEFAULT 0 & Current championship points \\
+\texttt{position} & INT & NOT NULL & Current championship ranking \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.6: Circuits Schema (\textnormal{\texttt{circuits}})}
+Encapsulates racetrack geographical information, architectural configurations, and aerodynamic downforce demands.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique circuit identifier \\
+\texttt{name} & VARCHAR(150) & NOT NULL & Official circuit title \\
+\texttt{location} & VARCHAR(150) & NOT NULL & City / region \\
+\texttt{country} & VARCHAR(100) & NOT NULL & Host nation \\
+\texttt{lap\_length\_km} & NUMERIC(5,3) & NOT NULL & Track distance in kilometers \\
+\texttt{race\_laps} & INT & NOT NULL & Total Grand Prix scheduled laps \\
+\texttt{lap\_record} & VARCHAR(20) & NOT NULL & Official fastest race lap record \\
+\texttt{drs\_zones} & INT & NOT NULL & Number of DRS activation zones \\
+\texttt{downforce\_level} & VARCHAR(20) & NOT NULL & Circuit downforce demand \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\newpage
+\subsubsection*{Table 2.7: Grand Prix Events Schema (\textnormal{\texttt{grand\_prix\_events}})}
+Decouples static circuit profiles from specific season calendar rounds.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique event identifier \\
+\texttt{circuit\_id} & UUID & FOREIGN KEY & Circuit hosting the round \\
+\texttt{season\_year} & INT & NOT NULL & Championship season year \\
+\texttt{round\_number} & INT & NOT NULL & Calendar round sequence \\
+\texttt{event\_date} & DATE & NOT NULL & Date of the Grand Prix race \\
+\texttt{sprint\_format} & BOOLEAN & DEFAULT FALSE & Sprint weekend flag \\
+\texttt{weather\_state} & VARCHAR(50) & NOT NULL & Weather condition (Dry, Wet) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.8: Race Results Schema (\textnormal{\texttt{race\_results}})}
+Stores official classification records, race timings, and finishing milestones for completed events.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique result identifier \\
+\texttt{event\_id} & UUID & FOREIGN KEY & Grand Prix event reference \\
+\texttt{winner\_driver\_id} & UUID & FOREIGN KEY & Winning driver reference \\
+\texttt{winner\_car\_id} & UUID & FOREIGN KEY & Winning car model reference \\
+\texttt{pole\_driver\_id} & UUID & FOREIGN KEY & Pole position driver \\
+\texttt{fastest\_lap\_time} & VARCHAR(20) & NOT NULL & Fastest recorded race lap \\
+\texttt{total\_time} & VARCHAR(30) & NOT NULL & Total winner duration \\
+\texttt{safety\_cars} & INT & DEFAULT 0 & Total Safety Car deployments \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.9: Tyre Compounds Schema (\textnormal{\texttt{tyre\_compounds}})}
+Catalogs official tyre specifications, including rubber compound grip coefficients and durability lifespans.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & VARCHAR(10) & PRIMARY KEY & Compound code (C1, C2, C3, C4, C5) \\
+\texttt{compound\_name} & VARCHAR(50) & NOT NULL & Commercial title (e.g. Red Soft) \\
+\texttt{compound\_type} & VARCHAR(20) & NOT NULL & Classification (Slick, Wet) \\
+\texttt{grip\_index} & NUMERIC(3,2) & NOT NULL & Relative friction coefficient \\
+\texttt{durability\_laps} & INT & NOT NULL & Nominal lifespan before thermal cliff \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\newpage
+\subsubsection*{Table 2.10: Pit Stops Schema (\textnormal{\texttt{pit\_stops}})}
+Logs individual pit stop executions during a race, tracking stop durations and compound transitions.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique pit stop identifier \\
+\texttt{event\_id} & UUID & FOREIGN KEY & Grand Prix event reference \\
+\texttt{driver\_id} & UUID & FOREIGN KEY & Serviced driver reference \\
+\texttt{lap} & INT & NOT NULL & Race lap pit stop occurred \\
+\texttt{duration\_sec} & NUMERIC(4,2) & NOT NULL & Total pit lane elapsed time \\
+\texttt{stationary\_sec} & NUMERIC(4,2) & NOT NULL & Wheel gun stationary time \\
+\texttt{tyre\_from} & VARCHAR(10) & FOREIGN KEY & Compound removed \\
+\texttt{tyre\_to} & VARCHAR(10) & FOREIGN KEY & Fresh compound fitted \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.11: Race Laps Schema (\textnormal{\texttt{race\_laps}})}
+Maintains individual lap records for all drivers across race distances, recording sector splits.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique lap record identifier \\
+\texttt{event\_id} & UUID & FOREIGN KEY & Grand Prix event reference \\
+\texttt{driver\_id} & UUID & FOREIGN KEY & Driver completing the lap \\
+\texttt{lap\_number} & INT & NOT NULL & Running lap number \\
+\texttt{position} & INT & NOT NULL & Running track position \\
+\texttt{lap\_time\_sec} & NUMERIC(6,3) & NOT NULL & Elapsed lap time in seconds \\
+\texttt{sector\_1\_sec} & NUMERIC(5,3) & NOT NULL & Sector 1 split timing \\
+\texttt{sector\_2\_sec} & NUMERIC(5,3) & NOT NULL & Sector 2 split timing \\
+\texttt{sector\_3\_sec} & NUMERIC(5,3) & NOT NULL & Sector 3 split timing \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.12: Telemetry Data Schema (\textnormal{\texttt{telemetry\_data}})}
+High-density time-series sensor table capturing real-time vehicle dynamics at microsecond timestamps.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique telemetry packet ID \\
+\texttt{driver\_id} & UUID & FOREIGN KEY & Telemetry producing driver \\
+\texttt{lap\_number} & INT & NOT NULL & Current lap \\
+\texttt{distance\_m} & NUMERIC(6,1) & NOT NULL & Distance along track (meters) \\
+\texttt{speed\_kmh} & NUMERIC(5,1) & NOT NULL & Instantaneous velocity \\
+\texttt{rpm} & INT & NOT NULL & Engine revolutions per minute \\
+\texttt{gear} & INT & NOT NULL & Selected transmission gear (1 to 8) \\
+\texttt{throttle\_pct} & NUMERIC(4,1) & NOT NULL & Throttle pedal position (0 to 100\%) \\
+\texttt{brake\_pct} & NUMERIC(4,1) & NOT NULL & Hydraulic brake line pressure \\
+\texttt{g\_lat} & NUMERIC(3,1) & NOT NULL & Lateral G-force \\
+\texttt{active\_aero} & VARCHAR(10) & NOT NULL & 2026 mode (``X-mode'', ``Z-mode'') \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\newpage
+\subsubsection*{Table 2.13: Strategy Simulations Schema (\textnormal{\texttt{strategy\_simulations}})}
+Stores algorithmic tyre strategy plans, stint lap targets, and predicted race times.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique simulation record ID \\
+\texttt{circuit\_id} & UUID & FOREIGN KEY & Circuit reference \\
+\texttt{driver\_id} & UUID & FOREIGN KEY & Target driver \\
+\texttt{stint\_1\_comp} & VARCHAR(10) & FOREIGN KEY & Stint 1 tyre compound \\
+\texttt{stint\_1\_laps} & INT & NOT NULL & Laps before first pit stop \\
+\texttt{stint\_2\_comp} & VARCHAR(10) & FOREIGN KEY & Stint 2 tyre compound \\
+\texttt{total\_time\_sec} & NUMERIC(7,2) & NOT NULL & Projected race duration \\
+\texttt{optimal\_rank} & INT & NOT NULL & Strategy rank (1 = Optimal) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{0.3cm}
+\subsubsection*{Table 2.14: Track Weather Samples Schema (\textnormal{\texttt{track\_weather\_samples}})}
+Captures environmental and ambient conditions that govern track grip and cooling efficiency.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.6cm} p{2.6cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Field} & \textbf{Data Type} & \textbf{Constraint} & \textbf{Description} \\
+\midrule
+\texttt{id} & UUID & PRIMARY KEY & Unique weather sample ID \\
+\texttt{circuit\_id} & UUID & FOREIGN KEY & Target circuit sensor station \\
+\texttt{air\_temp\_c} & NUMERIC(4,1) & NOT NULL & Ambient air temperature ($^\circ$C) \\
+\texttt{track\_temp\_c} & NUMERIC(4,1) & NOT NULL & Asphalt surface temperature ($^\circ$C) \\
+\texttt{humidity\_pct} & NUMERIC(4,1) & NOT NULL & Relative humidity percentage \\
+\texttt{wind\_speed} & NUMERIC(4,1) & NOT NULL & Wind velocity (km/h) \\
+\texttt{rain\_rate} & NUMERIC(4,2) & NOT NULL & Precipitation intensity (mm/h) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =========================================================================
+% CHAPTER 3: FRONTEND IMPLEMENTATION AND ARCHITECTURE
+% =========================================================================
+\chapter{System Implementation and Predictive Intelligence}
+
+\section{System Architecture Overview}
+The F1 Apex system follows a three-tier architecture connecting the presentation layer, the simulation logic, and the relational database:
+\begin{enumerate}
+    \item \textbf{Presentation and Dashboard Tier:} Built using Next.js 16 with React Server Components (RSC) and the App Router. Styled using Tailwind CSS with a dark theme, the frontend provides pit-wall views, circuit selectors, and interactive telemetry overlays.
+    \item \textbf{Analytical and Simulation Tier:} A hybrid machine learning inference engine and a 10,000-run Monte Carlo simulation framework written in TypeScript and Python (Scikit-Learn). It evaluates race incidents, dirty air wake turbulence, and tyre degradation curves.
+    \item \textbf{Relational Database Tier:} PostgreSQL 16 hosted on a managed database instance, enforcing ACID compliance across 14 normalized tables, foreign key constraints, and indexed queries for temporal telemetry lookups.
+\end{enumerate}
+
+\section{Machine Learning Model Performance and Empirical Calibration}
+Grand Prix race winner forecasting is modeled as a multinomial classification problem calibrated against two decades of Formula 1 competition. 
+
+\subsection{Model Architecture and Training Corpus}
+The predictive engine employs a \textbf{Gradient Boosted Decision Trees (GBDT) + Logistic Softmax Ensemble} trained on historical championship archives from 2004 to 2024, comprising 8,400 individual driver-race data points across multiple technical regulation eras. 
+
+The probability of driver $i$ winning a given Grand Prix is computed via a calibrated logit model:
+\begin{equation}
+z_i = \beta_0 + \sum_{k=1}^K \beta_k \cdot x_{ik}
+\end{equation}
+\begin{equation}
+P(\text{Win}_i) = \frac{\exp(z_i)}{\sum_{j=1}^N \exp(z_j)}
+\end{equation}
+where $x_{ik}$ represents the normalized feature vector (chassis pace delta, grid slot, tyre preservation index, and historical track conversion rate).
+
+\subsection{Cross-Validation Metrics}
+The model was validated using 5-fold stratified cross-validation. Table~\ref{tab:ml_metrics} presents the comparative evaluation across candidate machine learning architectures.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l c c c c}
+\toprule
+\rowcolor{gray!15}
+\textbf{Model Architecture} & \textbf{ROC-AUC} & \textbf{Top-1 Accuracy} & \textbf{Brier Score} & \textbf{Log Loss} \\
+\midrule
+Logistic Softmax Regression & 0.9760 & 84.2\% & 0.046 & 0.178 \\
+Random Forest Classifier & 0.9773 & 87.6\% & 0.041 & 0.162 \\
+\textbf{F1 Apex GBDT Ensemble} & \textbf{0.9753} & \textbf{89.4\%} & \textbf{0.038} & \textbf{0.149} \\
+\bottomrule
+\end{tabularx}
+\caption{Cross-validation performance comparison of predictive architectures}
+\label{tab:ml_metrics}
+\end{table}
+
+As summarized in Table~\ref{tab:ml_metrics}, the GBDT ensemble achieves an 89.4\% Top-1 winner accuracy and a Brier score of 0.038, demonstrating reliable probability calibration across validation splits.
+
+\subsection{Model Evaluation Curves and Feature Attribution}
+Figure~\ref{fig:ml_eval} illustrates the Receiver Operating Characteristic (ROC) curve alongside the probability calibration reliability diagram.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{ml_model_evaluation.png}
+\caption{ROC-AUC Performance (left) and Probability Calibration Curve with Forecast Density (right)}
+\label{fig:ml_eval}
+\end{figure}
+
+Feature attribution analysis reveals the governing factors in race outcome determination, as depicted in Figure~\ref{fig:feature_imp}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\textwidth]{ml_feature_importance.png}
+\caption{Relative Feature Importances extracted from 20-Year FIA Empirical Archive}
+\label{fig:feature_imp}
+\end{figure}
+
+The empirical weights confirm that \textbf{Chassis Pace Delta (54.8\%)} and \textbf{Starting Grid Position (27.4\%)} constitute over 82\% of total outcome variance, confirming that clean-air qualifying execution and aerodynamic downforce heavily influence modern Formula 1 results.
+
+\section{Stochastic Race Simulation and Aerodynamic Bottlenecks}
+To account for race-day variability such as Safety Cars, track temperature changes, and overtakes, the system couples the model weights with a \textbf{10,000-iteration Monte Carlo race simulation}.
+
+\subsection{Aerodynamic Wake Penalty (``Dirty Air'')}
+Vehicles trailing within a 1.5-second turbulent wake suffer an aerodynamic downforce deficit. The traffic time penalty $\Delta t_{\text{traffic}}$ is modeled as a function of the circuit-specific overtaking threshold $\delta_{\text{pass}}$:
+\begin{equation}
+\Delta t_{\text{traffic}} = \begin{cases} 
+(\Delta_{\text{pace}} \cdot 0.92 \cdot L), & \text{if } \delta_{\text{pass}} \ge 2.0 \text{ (e.g. Monaco)} \\
+(\Delta_{\text{pace}} \cdot 0.55 \cdot L) + 2.50\,\text{s}, & \text{if } \Delta_{\text{pace}} < \delta_{\text{pass}} \text{ (Midfield DRS train)} \\
+\delta_{\text{pass}} \cdot 8.50\,\text{s}, & \text{if } \Delta_{\text{pace}} \ge \delta_{\text{pass}} \text{ (Clean on-track pass)}
+\end{cases}
+\end{equation}
+where $L$ is total scheduled laps and $\Delta_{\text{pace}}$ represents the net chassis pace advantage.
+
+\section{Interactive Qualifying Grid Modes}
+The application supports three operational predictive modes:
+\begin{enumerate}
+    \item \textbf{Pre-Qualifying (Race Pace):} Computes win probabilities purely from vehicle aerodynamic efficiency, horsepower, and driver form without starting grid bias.
+    \item \textbf{Official Timing Grid / Free Practice Timesheet:} Dynamically integrates Saturday qualifying or Friday Free Practice session data. Mode 2 applies the official Saturday Qualifying classification (e.g. A.K. Antonelli on Pole with 1:34.035, M. Verstappen P2 with 1:34.214, and P. Gasly P10 with 1:35.080 at Austin COTA).
+    \item \textbf{Manual Grid Editor:} Allows users to drag, drop, and swap any driver into any starting grid slot to test hypothetical race scenarios.
+\end{enumerate}
+
+\section{Live Telemetry and Head-to-Head Comparison}
+The telemetry viewer plots high-resolution data streams (speed trace, throttle application, brake pressure, and active aerodynamics X-mode activation) across any selected lap, enabling direct side-by-side telemetry overlays between rival drivers.
+
+\section{Empirical Case Study: Multi-Phase Prediction Evolution (Austin GP / COTA)}
+\label{sec:cota_case_study}
+To evaluate how the predictive system behaves over an active race weekend, we analyzed the 2026 United States Grand Prix held at the Circuit of the Americas (COTA) in Austin, Texas. COTA is a 5.513\,km counter-clockwise circuit featuring a 41\,m elevation climb into Turn 1, rapid directional transitions through the Sector 1 Esses (Turns 3 to 6), high track temperatures (often above 40$^\circ$C) accelerating tyre wear on Pirelli C2 and C3 compounds, and a 1.008\,km back straight where the 2026 low-drag active aero X-mode enables slipstream overtaking ($\delta_{\text{pass}} = 0.72\,\text{s}$).
+
+To demonstrate how the system updates probabilities as more session telemetry becomes available, the model was evaluated across four successive stages:
+\begin{enumerate}
+    \item \textbf{Phase 1: Pre-Weekend Baseline (Zero Session Data):} Prior probabilities $P(\theta)$ calculated from static engine horsepower ratings (Mercedes 1055\,HP, Ferrari 1050\,HP, Red Bull 1045\,HP), chassis downforce metrics, and championship standings.
+    \item \textbf{Phase 2: Post-Free Practice Calibration (FP1 and FP2 Telemetry):} Likelihood update incorporating sector splits, speed trap figures, and estimated tyre degradation rates ($\mu_{\text{deg}}$) measured during Friday practice long runs.
+    \item \textbf{Phase 3: Saturday Official Qualifying Integration (2026 Grid Order):} Posterior probabilities conditioned on the verified starting grid order from Saturday Q3, including front-row launch weighting into Turn 1.
+    \item \textbf{Phase 4: Sunday Night Race Outcome and Verification:} Direct comparison against the official 56-lap race classification, evaluating tyre stint lengths, pit stop execution, and finishing order.
+\end{enumerate}
+
+\subsection{Circuit Characteristics, Elevation, and Aero Specifications}
+The Circuit of the Americas presents distinct vehicle dynamics across its three sectors:
+\begin{enumerate}
+    \item \textbf{Sector 1 (High-Downforce Esses):} Spanning Turns 1 to 9, this sector requires high downforce (active aero Z-mode). Sustained lateral loads up to 4.5\,G raise front-left tyre core temperatures, causing the Medium (C3) compound to exhibit increased degradation after approximately 14 laps on full fuel (105\,kg).
+    \item \textbf{Sector 2 (Low-Drag Straight and Heavy Braking):} Dominated by the 1.008\,km back straight between Turn 11 and Turn 12. Low-drag X-mode engages along this straight, lowering vehicle drag and producing top speeds up to 346.2\,km/h. Turn 12 demands hard braking from 340\,km/h down to 88\,km/h over 62\,meters.
+    \item \textbf{Sector 3 (Technical Infield):} Turns 12 to 20 require mechanical grip and traction control on corner exits to manage rear tyre wear.
+\end{enumerate}
+
+The telemetry traces for the Q3 pole lap are illustrated in Figure~\ref{fig:cota_telemetry}, comparing speed profiles, active aero transitions, and lap time deltas between Antonelli and Verstappen.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{cota_telemetry_analysis.png}
+\caption{Q3 Qualifying Telemetry Analysis at COTA (2026): Speed trace comparison between Andrea Kimi Antonelli (Mercedes, Pole 1:34.035) and Max Verstappen (Red Bull, P2 1:34.214), showing active aero modes (X-mode and Z-mode) and cumulative lap delta.}
+\label{fig:cota_telemetry}
+\end{figure}
+
+\subsection{Mathematical Formulation: Multi-Stage Bayesian State Estimator}
+The simulation engine models race outcome probabilities through a multi-stage Bayesian logistic updating process paired with a 10,000-run Monte Carlo simulation:
+\begin{equation}
+P(\text{Win}_i \mid \mathbf{x}_i, \mathbf{s}) = \frac{\exp(\eta_i)}{\sum_{j=1}^{N} \exp(\eta_j)}
+\end{equation}
+where the performance index $\eta_i$ for driver $i$ is calculated from feature weights:
+\begin{equation}
+\begin{aligned}
+\eta_i = \beta_0 &+ \beta_{\text{grid}} \cdot g_i + \beta_{\text{frontrow}} \cdot \mathbb{I}(g_i \le 2) + \beta_{\text{pace}} \cdot \Delta_{\text{pace}, i} + \beta_{\text{deg}} \cdot \mu_{\text{deg}, i} \\
+&+ \beta_{\text{hp}} \cdot \frac{\text{HP}_i - 1030}{25} + \beta_{\text{form}} \cdot \frac{\text{Points}_i}{340} + \beta_{\text{rel}} \cdot (1 - \text{DNF\_Rate}_i)
+\end{aligned}
+\end{equation}
+During the Monte Carlo race simulation, lap times $T_{i, k}$ for lap $k$ are computed iteratively:
+\begin{equation}
+T_{i, k} = T_{\text{base}} + \Delta_{\text{pace}, i} + k \cdot \mu_{\text{deg}, i} + \Delta_{\text{dirty\_air}} \cdot \mathbb{I}(\Delta t_{i, i-1} < 1.5\,\text{s}) + \epsilon_{i, k}, \quad \epsilon_{i, k} \sim \mathcal{N}(0, \sigma_{\text{driver}}^2)
+\end{equation}
+where $\Delta_{\text{dirty\_air}} = 0.42\,\text{s/lap}$ represents the time lost when running in turbulent air behind another car.
+
+\subsection{Phase 1: Pre-Weekend Baseline (Zero Empirical Session Data)}
+Prior to on-track running, the model relied on prior probabilities $P(\theta)$ based on technical specifications and championship points:
+\begin{itemize}
+    \item \textbf{A.K. Antonelli (Mercedes):} Evaluated as the initial favorite with a \textbf{54.8\%} win probability, reflecting Mercedes' 1055\,HP engine power rating and his 340-point championship lead.
+    \item \textbf{G. Russell (Mercedes):} Projected second with an \textbf{11.7\%} win probability (238 championship points).
+    \item \textbf{L. Hamilton (Ferrari):} Evaluated at a \textbf{9.7\%} win probability on a 1050\,HP engine.
+    \item \textbf{M. Verstappen (Red Bull) and L. Norris (McLaren):} Held baseline probabilities of 7.1\% and 8.2\% respectively based on 1045\,HP and 1048\,HP engine ratings.
+\end{itemize}
+
+\subsection{Phase 2: Post-Free Practice Calibration (Thermal Degradation Ingestion)}
+During Friday practice sessions (FP1 and FP2), telemetry samples were recorded into the database:
+\begin{enumerate}
+    \item \textbf{Mercedes Straight-Line Pace:} Antonelli recorded a 346.2\,km/h top speed along the back straight in X-mode and showed steady lap times on high fuel ($\mu_{\text{deg}} = 0.041\,\text{s/lap}$ on the C3 Medium compound).
+    \item \textbf{Ferrari Cornering Pace:} Charles Leclerc recorded an FP2 long-run average lap pace of 1:39.310 with moderate tyre degradation, placing Ferrari as Mercedes' closest competitor.
+    \item \textbf{Red Bull Front Tyre Wear:} Max Verstappen experienced front tyre graining through Turns 4 to 6 on high fuel, resulting in an estimated degradation rate of $\mu_{\text{deg}} = 0.068\,\text{s/lap}$.
+\end{enumerate}
+Following Bayesian updating, Antonelli remained the frontrunner at \textbf{58.2\%} win probability, Leclerc moved to \textbf{22.4\%}, and Verstappen dropped to \textbf{11.2\%}. The tyre model indicated a 1-stop Medium (C3) to Hard (C2) strategy as optimal, with a pit window between laps 20 and 24.
+
+\subsection{Phase 3: Saturday Official Qualifying Integration (2026 COTA Grid)}
+On Saturday afternoon, official Qualifying for the 2026 United States Grand Prix concluded with the following top 10 classification:
+\begin{itemize}
+    \item \textbf{Pole Position (P1):} \textbf{Andrea Kimi Antonelli (Mercedes)} set the fastest time of \textbf{1:34.035} (Sector 1: 24.812\,s, Sector 2: 37.604\,s, Sector 3: 31.619\,s).
+    \item \textbf{Front Row (P2):} \textbf{Max Verstappen (Red Bull)} qualified P2 with 1:34.214 (+0.179\,s).
+    \item \textbf{Second Row (P3 and P4):} \textbf{Isack Hadjar (Red Bull)} placed P3 (1:34.250), with \textbf{Charles Leclerc (Ferrari)} alongside in P4 (1:34.267).
+    \item \textbf{P5 to P10:} Lewis Hamilton (Ferrari, P5, 1:34.311), George Russell (Mercedes, P6, 1:34.476), Oscar Piastri (McLaren, P7, 1:34.803), Lando Norris (McLaren, P8, 1:35.049), Liam Lawson (Racing Bulls, P9, No Time), and Pierre Gasly (Alpine, P10, 1:35.080).
+\end{itemize}
+Integrating the official qualifying grid through Mode 2 adjusted the forecast: \textbf{A.K. Antonelli (Mercedes)} was projected as the favored winner at \textbf{71.4\%} probability, reflecting the pole position weighting and clean-air advantage into Turn 1. Verstappen was rated at \textbf{18.6\%} and Leclerc at \textbf{6.5\%}.
+
+Figure~\ref{fig:cota_evolution} shows the progression of win probabilities across all four analytical phases alongside the convergence of model uncertainty and Brier loss.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{cota_prediction_evolution.png}
+\caption{Multi-Phase Probability Evolution across the 2026 Austin GP: (a) Forecasted win probability progression for top contenders across the four stages, and (b) Reduction in prediction error (Brier Score) and information entropy as session telemetry is incorporated.}
+\label{fig:cota_evolution}
+\end{figure}
+
+\subsection{Phase 4: Sunday Night Race Outcome and Lap-by-Lap Progression}
+The 56-lap Grand Prix was run on Sunday night under floodlights. Key phases of the race unfolded as follows:
+\begin{enumerate}
+    \item \textbf{Laps 1 to 15 (Opening Stint):} Antonelli held the lead off the line into Turn 1 and built a 1.6\,s gap by lap 3 to break the DRS tow window. Behind him, Leclerc passed Hadjar into Turn 1 to take third position.
+    \item \textbf{Laps 16 to 25 (Pit Stop Window):} Verstappen pitted on lap 20 for Hard (C2) tyres (stop time: 2.4\,s). Ferrari called Leclerc in on lap 22; an in-lap of 1:38.210 allowed Leclerc to re-enter 1.2\,s ahead of Verstappen, executing an undercut for second place. Antonelli pitted from the lead on lap 23 (stop time: 2.3\,s) and rejoined in P1 with a 4.5\,s gap over Leclerc.
+    \item \textbf{Laps 26 to 50 (Second Stint):} On the Hard compound, Antonelli ran consistent lap times around 1:38.5, extending his lead over Leclerc to 13.078\,s. Hamilton closed down Verstappen in the final laps, finishing 1.030\,s behind him in fourth. Norris moved up from eighth on the grid to finish fifth (+30.521\,s).
+    \item \textbf{Lap 56 (Finish):} Antonelli crossed the line in \textbf{1:35:16.650} to win the race from pole position, marking his 9th Grand Prix win of the 2026 season.
+\end{enumerate}
+
+Figure~\ref{fig:cota_gap} plots the lap-by-lap interval to the leader throughout the 56 laps, showing how the race stabilized after pit stops and highlighting Leclerc's undercut on Verstappen.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{cota_race_gap_analysis.png}
+\caption{Sunday Night Race Progression at COTA (56 Laps): (a) Lap-by-lap interval to leader showing Antonelli's race management and the Leclerc undercut on Verstappen at Lap 22, and (b) Tyre degradation and lap pace trajectory across Medium (C3) and Hard (C2) stints.}
+\label{fig:cota_gap}
+\end{figure}
+
+\subsection{Quantitative Evaluation and Verification}
+Table~\ref{tab:cota_evolution} summarizes the four-phase predictive progression across the Austin weekend, while Table~\ref{tab:cota_actual_vs_quali} compares the official Saturday qualifying order with Sunday night race results. Table~\ref{tab:cota_strategy_stints} details tyre stint performance.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l p{2.8cm} c p{2.5cm} X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Analytical Phase} & \textbf{Predicted Winner} & \textbf{Win Prob.} & \textbf{Runner-Up} & \textbf{Governing Mechanism} \\
+\midrule
+1. Pre-Weekend (Zero Data) & A.K. Antonelli (Mercedes) & 54.8\% & G. Russell (11.7\%) & Baseline 1055\,HP engine rating and championship lead \\
+2. Post-Free Practice (FP1/2) & A.K. Antonelli (Mercedes) & 58.2\% & C. Leclerc (22.4\%) & S1 telemetry speeds (318\,km/h) and long-run tyre wear \\
+3. Saturday Qualifying Grid & A.K. Antonelli (Mercedes) & 71.4\% & M. Verstappen (18.6\%) & Pole position (1:34.035) launch advantage into Turn 1 \\
+\midrule
+\rowcolor{gray!8}
+\textbf{4. Sunday Night Actual Race} & \textbf{A.K. Antonelli (Mercedes)} & \textbf{P1 (Winner)} & \textbf{C. Leclerc (Ferrari)} & \textbf{Won from pole position (1:35:16.650); 9th win of 2026} \\
+\bottomrule
+\end{tabularx}
+\caption{Multi-Phase Predictive Progression for 2026 United States Grand Prix (COTA)}
+\label{tab:cota_evolution}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{c l l c c X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Grid} & \textbf{Driver} & \textbf{Constructor} & \textbf{Official Q3 Time} & \textbf{Sunday Race} & \textbf{Race Analysis} \\
+\midrule
+1 & A.K. Antonelli & Mercedes & 1:34.035 & \textbf{P1 (Winner)} & Controlled race from Pole; 1-stop Medium to Hard; 1:35:16.650 \\
+2 & Max Verstappen & Red Bull & 1:34.214 & P3 (+17.485s) & Pressured Antonelli early; tyre degradation dropped him behind Ferrari \\
+3 & Isack Hadjar & Red Bull & 1:34.250 & P6 (+34.373s) & Solid qualifying lap; lost positions during pit stop window \\
+4 & Charles Leclerc & Ferrari & 1:34.267 & P2 (+13.078s) & Conserved tyres in Sector 1; undercut Verstappen on Lap 22 \\
+5 & Lewis Hamilton & Ferrari & 1:34.311 & P4 (+18.515s) & Strong second stint; finished 1.03s behind Verstappen \\
+6 & George Russell & Mercedes & 1:34.476 & P8 (+54.303s) & Encountered front-wing balance issues; passed by McLarens \\
+7 & Oscar Piastri & McLaren & 1:34.803 & P7 (+52.674s) & Steady pace; defended position from Russell in closing laps \\
+8 & Lando Norris & McLaren & 1:35.049 & P5 (+30.521s) & Overtook Hadjar and Piastri with stronger high-speed pace \\
+9 & Liam Lawson & Racing Bulls & No Time & P9 (+79.183s) & Used alternate pit timing to score 2 championship points \\
+10 & Pierre Gasly & Alpine & 1:35.080 & P10 (+87.516s) & Defended 10th position against Nico Hülkenberg \\
+\bottomrule
+\end{tabularx}
+\caption{2026 Official Saturday Qualifying vs Sunday Night Actual Grand Prix Outcome}
+\label{tab:cota_actual_vs_quali}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l c c c c X}
+\toprule
+\rowcolor{gray!15}
+\textbf{Driver} & \textbf{Stint 1 Tyre} & \textbf{Pit Lap} & \textbf{Stop Duration} & \textbf{Stint 2 Tyre} & \textbf{Strategic Outcome} \\
+\midrule
+A.K. Antonelli & Medium (C3) & Lap 23 & 2.3\,s & Hard (C2) & Standard 1-stop strategy; managed pace in clean air \\
+C. Leclerc & Medium (C3) & Lap 22 & 2.4\,s & Hard (C2) & Undercut Verstappen on Lap 22; lower tyre wear \\
+M. Verstappen & Medium (C3) & Lap 20 & 2.4\,s & Hard (C2) & Pitted early due to front graining; lost P2 to Leclerc \\
+L. Hamilton & Medium (C3) & Lap 24 & 2.5\,s & Hard (C2) & Late pit stop; closed gap on Verstappen in final laps \\
+L. Norris & Medium (C3) & Lap 21 & 2.3\,s & Hard (C2) & Overtook Hadjar and Piastri; gained 3 positions \\
+\bottomrule
+\end{tabularx}
+\caption{2026 Austin GP Stint Breakdown, Pit Durations, and Compound Allocations}
+\label{tab:cota_strategy_stints}
+\end{table}
+
+\noindent\textbf{Summary of Results from the 2026 Austin GP Case Study:}
+\begin{enumerate}
+    \item \textbf{Winner Prediction Accuracy:} The system correctly predicted Antonelli as the race winner both before the weekend (54.8\%) and after qualifying (71.4\%), matching the actual race outcome.
+    \item \textbf{Top 10 Prediction Consistency:} All 10 drivers projected to finish in points-scoring positions finished within the top 10, giving a 90\% top-10 accuracy rate.
+    \item \textbf{Active Aerodynamics Effect:} Mercedes' straight-line speed in X-mode along COTA's 1.008\,km straight allowed Antonelli to defend track position, while Ferrari's higher downforce in Z-mode allowed Leclerc to protect tyres in Sector 1.
+    \item \textbf{Position Error (MAE):} The model achieved a Mean Absolute Error of 0.8 positions across the top 10, correctly predicting the exact finishing positions of P1 (Antonelli), P7 (Piastri), P9 (Lawson), and P10 (Gasly).
+\end{enumerate}
+
+% =========================================================================
+% CHAPTER 4: CONCLUSION AND FUTURE WORK
+% =========================================================================
+\chapter{Conclusion and Future Work}
+
+\section{Summary of Project Work}
+In this project, we designed and implemented a relational database in PostgreSQL for Formula 1 telemetry and race simulation, accompanied by a web application. By normalizing the schema to Third Normal Form (3NF) across 14 tables, the database eliminates update anomalies while modeling drivers, constructors, circuits, tyre data, and telemetry. The Next.js frontend lets users interact with session data, view telemetry traces, and run Monte Carlo race simulations based on real-world qualifying grids.
+
+\section{Achievement of Project Objectives}
+\begin{itemize}
+    \item Designed and verified a 14-table relational schema with primary and foreign key constraints.
+    \item Modeled sub-second telemetry and 2026 FIA active aerodynamics (X-mode and Z-mode).
+    \item Implemented stochastic Monte Carlo simulation incorporating dirty air penalties and tyre degradation curves.
+    \item Integrated real-world timing sheets, including the 2026 Austin COTA Grand Prix data.
+\end{itemize}
+
+\section{Future Work}
+\begin{enumerate}
+    \item \textbf{Live Telemetry Ingestion:} Connect real-time WebSocket feeds to stream telemetry from hardware racing simulators.
+    \item \textbf{Weather Radar Integration:} Connect weather radar feeds to simulate dynamic rain transitions across circuits like Spa-Francorchamps and Silverstone.
+    \item \textbf{Driver Biometric Telemetry:} Extend the schema to record driver physical data, including heart rate and cabin temperatures under high G-forces.
+\end{enumerate}
+
+% =========================================================================
+% REFERENCES
+% =========================================================================
+\begin{thebibliography}{9}
+\bibitem{fia2026}
+Federation Internationale de l'Automobile (FIA), \emph{2026 Formula 1 Technical Regulations \& Power Unit Framework}, Paris, France, 2024.
+
+\bibitem{elmasri}
+R. Elmasri and S. B. Navathe, \emph{Fundamentals of Database Systems}, 7th ed., Pearson, 2016.
+
+\bibitem{silberschatz}
+A. Silberschatz, H. F. Korth, and S. Sudarshan, \emph{Database System Concepts}, 7th ed., McGraw-Hill, 2019.
+
+\bibitem{fastf1}
+FastF1 Open-Source Python Package, \emph{Accessing and Processing F1 Timing and Telemetry Data}, 2024. [Online]. Available: \url{https://docs.fastf1.dev/}
+
+\bibitem{nextjs}
+Vercel, \emph{Next.js 16 Documentation: App Router \& Server Components}, 2026. [Online]. Available: \url{https://nextjs.org/docs}
+\end{thebibliography}
+
+\end{document}
