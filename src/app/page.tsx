@@ -22,6 +22,11 @@ import {
   StrategySimulation,
   HeadToHeadComparison
 } from "@/types/f1";
+import {
+  CIRCUIT_WEEKEND_PROGRESSION,
+  CircuitProgression,
+  OFFICIAL_FP1_DATA
+} from "@/lib/f1InferenceModel";
 
 interface QualiGridEntry
 {
@@ -65,6 +70,13 @@ export const DEFAULT_TOP10_BY_TRACK: Record<string, string[]> = {
   silverstone: ["RUS", "HAM", "NOR", "VER", "ANT", "PIA", "LEC", "HAD", "BEA", "ALB"],
   monza: ["VER", "NOR", "RUS", "HAM", "LEC", "ANT", "PIA", "HUL", "HAD", "COL"],
   cota: ["ANT", "VER", "HAD", "LEC", "HAM", "RUS", "PIA", "NOR", "LAW", "GAS"]
+};
+
+export const DEFAULT_FP1_TOP10_BY_TRACK: Record<string, string[]> = {
+  monaco: ["LEC", "ANT", "RUS", "HAM", "VER", "NOR", "PIA", "HAD", "LAW", "GAS"],
+  silverstone: ["NOR", "RUS", "HAM", "PIA", "ANT", "VER", "LEC", "HAD", "BEA", "ALB"],
+  monza: ["VER", "NOR", "RUS", "ANT", "LEC", "HAM", "PIA", "HUL", "HAD", "COL"],
+  cota: ["ANT", "LEC", "VER", "RUS", "NOR", "HAM", "HAD", "PIA", "GAS", "LAW"]
 };
 
 export interface ConstructorTrackAssessment
@@ -150,6 +162,9 @@ interface PredictionResult
   qualiMode?: "without_quali" | "official_quali" | "manual_quali";
   modeLabel?: string;
   appliedGrid?: QualiGridEntry[];
+  timingSession?: "quali" | "fp1";
+  fp1Grid?: QualiGridEntry[];
+  weekendProgression?: CircuitProgression;
   bestConstructor?: ConstructorTrackAssessment;
   constructorHierarchy?: ConstructorTrackAssessment[];
   mlModel?: MLModelMetricsData;
@@ -184,7 +199,8 @@ export default function Home()
   const [predictionData, setPredictionData] = useState<PredictionResult | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [isWetWeather, setIsWetWeather] = useState(false);
-  const [showCotaCaseStudy, setShowCotaCaseStudy] = useState(true);
+  const [timingSession, setTimingSession] = useState<"quali" | "fp1">("quali");
+  const [showMultiPhaseCaseStudy, setShowMultiPhaseCaseStudy] = useState(true);
 
   const [standings, setStandings] = useState<Driver[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetrySample | null>(null);
@@ -205,14 +221,16 @@ export default function Home()
     track: "monaco" | "silverstone" | "monza" | "cota" = selectedTrack,
     mode: "without_quali" | "official_quali" | "manual_quali" = qualiMode,
     top10: string[] = manualTop10,
-    wet: boolean = isWetWeather
+    wet: boolean = isWetWeather,
+    session: "quali" | "fp1" = timingSession
   ) =>
   {
     setSelectedTrack(track);
     setQualiMode(mode);
     setIsSimulating(true);
+    setTimingSession(session);
 
-    let url = `/api/predictions?track=${track}&mode=${mode}&rain=${wet}`;
+    let url = `/api/predictions?track=${track}&mode=${mode}&rain=${wet}&session=${session}`;
     if (mode === "manual_quali")
     {
       const gridParam = top10.map((code, idx) => `${code}:${idx + 1}`).join(",");
@@ -234,9 +252,9 @@ export default function Home()
 
   const handleTrackChange = (trackId: "monaco" | "silverstone" | "monza" | "cota") =>
   {
-    const nextTop10 = DEFAULT_TOP10_BY_TRACK[trackId] || DEFAULT_TOP10_BY_TRACK.monaco;
+    const nextTop10 = (timingSession === "fp1" ? DEFAULT_FP1_TOP10_BY_TRACK[trackId] : DEFAULT_TOP10_BY_TRACK[trackId]) || DEFAULT_TOP10_BY_TRACK.monaco;
     setManualTop10(nextTop10);
-    loadPrediction(trackId, qualiMode, nextTop10);
+    loadPrediction(trackId, qualiMode, nextTop10, isWetWeather, timingSession);
   };
 
   const handleTop10SlotChange = (posIndex: number, newDriverCode: string) =>
@@ -259,7 +277,7 @@ export default function Home()
     loadPrediction(selectedTrack, "manual_quali", nextTop10);
   };
 
-  const applyPresetGrid = (preset: "official" | "reverse" | "ferrari" | "redbull" | "mclaren" | "mercedes") =>
+  const applyPresetGrid = (preset: "official" | "fp1" | "reverse" | "ferrari" | "redbull" | "mclaren" | "mercedes") =>
   {
     const official = DEFAULT_TOP10_BY_TRACK[selectedTrack] || DEFAULT_TOP10_BY_TRACK.monaco;
     let nextTop10: string[];
@@ -267,6 +285,10 @@ export default function Home()
     if (preset === "official")
     {
       nextTop10 = [...official];
+    }
+    else if (preset === "fp1")
+    {
+      nextTop10 = [...(DEFAULT_FP1_TOP10_BY_TRACK[selectedTrack] || DEFAULT_FP1_TOP10_BY_TRACK.monaco)];
     }
     else if (preset === "reverse")
     {
@@ -461,31 +483,90 @@ export default function Home()
             </div>
           )}
 
-          {/* Mode 2: Official Quali Grid Banner */}
+          {/* Mode 2: Session Timing Banner (Qualifying Q3 vs Free Practice 1 FP1) */}
           {qualiMode === "official_quali" && predictionData?.appliedGrid && (
             <div className="mb-6 p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/90 text-xs">
-              <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-zinc-800/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 pb-2.5 border-b border-zinc-800/80 gap-2">
                 <div className="font-semibold text-zinc-300 uppercase tracking-wider text-[11px] flex items-center gap-2">
-                  <Flag className="w-3.5 h-3.5 text-[#E10600]" />
-                  Official Saturday Qualifying Starting Order
+                  {timingSession === "fp1" ? (
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Flag className="w-3.5 h-3.5 text-[#E10600]" />
+                  )}
+                  {timingSession === "fp1"
+                    ? "Friday Free Practice 1 (FP1) Session Leaderboard"
+                    : "Official Saturday Qualifying Starting Order"}
                 </div>
-                <span className="text-zinc-500 font-mono text-[11px]">Official Q3 Times</span>
+
+                {/* Session Selector Pill Toggle */}
+                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-mono">
+                  <button
+                    onClick={() => loadPrediction(selectedTrack, "official_quali", manualTop10, isWetWeather, "quali")}
+                    className={`px-2.5 py-1 rounded transition-all ${
+                      timingSession === "quali"
+                        ? "bg-[#E10600] text-white font-bold shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    Saturday Quali (Q3)
+                  </button>
+                  <button
+                    onClick={() => loadPrediction(selectedTrack, "official_quali", manualTop10, isWetWeather, "fp1")}
+                    className={`px-2.5 py-1 rounded transition-all ${
+                      timingSession === "fp1"
+                        ? "bg-emerald-600 text-white font-bold shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    Friday Free Practice 1 (FP1)
+                  </button>
+                </div>
               </div>
+
+              {/* Grid / Session Leaderboard Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {predictionData.appliedGrid.slice(0, 5).map
                 (
                   (entry) =>
                   (
-                    <div key={entry.code} className="p-2.5 rounded bg-zinc-900/60 border border-zinc-800/80">
+                    <div
+                      key={entry.code}
+                      className={`p-2.5 rounded border transition-all ${
+                        timingSession === "fp1"
+                          ? entry.pos === 1
+                            ? "bg-emerald-950/30 border-emerald-500/50"
+                            : "bg-zinc-900/60 border-zinc-800/80"
+                          : entry.pos === 1
+                            ? "bg-zinc-900 border-amber-500/50"
+                            : "bg-zinc-900/60 border-zinc-800/80"
+                      }`}
+                    >
                       <div className="flex items-center justify-between text-zinc-400 font-mono">
-                        <span className={`font-bold ${entry.pos === 1 ? "text-amber-400" : "text-zinc-300"}`}>P{entry.pos}</span>
-                        <span className="text-[10px] text-zinc-500">{entry.time || entry.gap}</span>
+                        <span className={`font-bold ${
+                          entry.pos === 1
+                            ? timingSession === "fp1" ? "text-emerald-400" : "text-amber-400"
+                            : "text-zinc-300"
+                        }`}>
+                          P{entry.pos}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-mono">{entry.time || entry.gap}</span>
                       </div>
                       <div className="font-semibold text-white text-xs truncate mt-0.5">{entry.name}</div>
                       <div className="text-[10px] text-zinc-400 truncate">{entry.team}</div>
                     </div>
                   )
                 )}
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-zinc-800/50 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-zinc-400 gap-1 font-mono">
+                <span>
+                  {timingSession === "fp1"
+                    ? "FP1 Ingestion: Driver pace delta calibrated from representative high-fuel and soft tyre runs."
+                    : "Q3 Ingestion: Starting grid locked to official FIA Saturday qualifying classification."}
+                </span>
+                <span className="text-zinc-500 text-[10px]">
+                  Applied: {predictionData.appliedGrid[0]?.name} ({predictionData.appliedGrid[0]?.time})
+                </span>
               </div>
             </div>
           )}
@@ -511,6 +592,12 @@ export default function Home()
                     className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
                   >
                     Official Grid
+                  </button>
+                  <button
+                    onClick={() => applyPresetGrid("fp1")}
+                    className="px-2.5 py-1 text-[11px] font-mono rounded bg-zinc-900 border border-emerald-800/60 text-emerald-400 hover:text-emerald-300 hover:border-emerald-600 transition-colors"
+                  >
+                    FP1 Order
                   </button>
                   <button
                     onClick={() => applyPresetGrid("reverse")}
@@ -893,105 +980,77 @@ export default function Home()
                 </p>
               </div>
 
-              {/* COTA Multi-Phase Case Study Progression */}
-              {selectedTrack === "cota" && (
+              {/* Multi-Phase Empirical Case Study Progression */}
+              {CIRCUIT_WEEKEND_PROGRESSION[selectedTrack] && (
                 <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-zinc-950 via-zinc-900/60 to-zinc-950 border border-zinc-800/90">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-zinc-800/80">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                       <span className="text-xs uppercase tracking-wider text-zinc-200 font-semibold flex items-center gap-2">
-                        Austin COTA Empirical Case Study: Multi-Phase Progression
+                        {CIRCUIT_WEEKEND_PROGRESSION[selectedTrack].circuitName} Empirical Case Study: Multi-Phase Progression
                       </span>
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">
-                        Pre-Race → Actual
+                        {CIRCUIT_WEEKEND_PROGRESSION[selectedTrack].tagline}
                       </span>
                     </div>
                     <button
-                      onClick={() => setShowCotaCaseStudy(!showCotaCaseStudy)}
+                      onClick={() => setShowMultiPhaseCaseStudy(!showMultiPhaseCaseStudy)}
                       className="text-xs font-mono text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 w-fit"
                     >
-                      {showCotaCaseStudy ? "Hide Details" : "Expand Case Study"}
+                      {showMultiPhaseCaseStudy ? "Hide Details" : "Expand Case Study"}
                     </button>
                   </div>
 
-                  {showCotaCaseStudy && (
+                  {showMultiPhaseCaseStudy && (
                     <div className="space-y-3">
                       <p className="text-[11px] text-zinc-400 leading-relaxed">
-                        Demonstrating how the inference engine performs sequential Bayesian updating across a race weekend: from zero session data to Free Practice telemetry ingestion, official Saturday Qualifying, and Sunday night ground-truth verification.
+                        Demonstrating how the inference engine performs sequential Bayesian updating across the {tracks.find((t) => t.id === selectedTrack)?.name || "Grand Prix"} weekend: from zero session data to Friday Free Practice 1 telemetry ingestion, official Saturday Qualifying, and Sunday night ground-truth verification.
                       </p>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
-                        {/* Phase 1 */}
-                        <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 mb-1">
-                              <span>PHASE 1</span>
-                              <span className="text-zinc-400">Zero Data</span>
+                        {CIRCUIT_WEEKEND_PROGRESSION[selectedTrack].phases.map
+                        (
+                          (phase) =>
+                          (
+                            <div
+                              key={phase.phaseNum}
+                              className={`p-3 rounded-lg flex flex-col justify-between ${
+                                phase.phaseNum === 4
+                                  ? "bg-emerald-950/20 border border-emerald-500/30"
+                                  : "bg-zinc-900/60 border border-zinc-800/80"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] font-mono mb-1">
+                                  <span className={phase.phaseNum === 4 ? "text-emerald-400 font-bold" : "text-zinc-500"}>
+                                    PHASE {phase.phaseNum}
+                                  </span>
+                                  <span className={phase.badgeColor}>{phase.badge}</span>
+                                </div>
+                                <div className={`font-bold text-xs ${phase.phaseNum === 4 ? "text-white" : "text-zinc-200"}`}>
+                                  {phase.title}
+                                </div>
+                                <div className={`text-[11px] font-semibold mt-1.5 ${
+                                  phase.phaseNum === 1 ? "text-sky-400" :
+                                  phase.phaseNum === 2 ? "text-emerald-400" :
+                                  phase.phaseNum === 3 ? "text-amber-400" : "text-emerald-300"
+                                }`}>
+                                  {phase.leader} <span className="font-mono text-zinc-400 font-normal">{phase.leaderStat}</span>
+                                </div>
+                                <div className={`text-[10px] ${phase.phaseNum === 4 ? "text-zinc-300 font-medium" : "text-zinc-400"}`}>
+                                  {phase.secondary}
+                                </div>
+                              </div>
+                              <div className={`mt-2 pt-2 border-t text-[10px] leading-snug ${
+                                phase.phaseNum === 4
+                                  ? "border-emerald-500/20 text-zinc-300"
+                                  : "border-zinc-800/60 text-zinc-500"
+                              }`}>
+                                {phase.notes}
+                              </div>
                             </div>
-                            <div className="font-bold text-xs text-zinc-200">Pre-Weekend Baseline</div>
-                            <div className="text-[11px] font-semibold text-sky-400 mt-1.5">
-                              A.K. Antonelli <span className="font-mono text-zinc-400 font-normal">(54.8%)</span>
-                            </div>
-                            <div className="text-[10px] text-zinc-400">Runner-up: G. Russell (11.7%)</div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-zinc-800/60 text-[10px] text-zinc-500 leading-snug">
-                            Evaluated on static 1055 HP engine dyno & championship points lead.
-                          </div>
-                        </div>
-
-                        {/* Phase 2 */}
-                        <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 mb-1">
-                              <span>PHASE 2</span>
-                              <span className="text-emerald-400">FP Telemetry</span>
-                            </div>
-                            <div className="font-bold text-xs text-zinc-200">Post-Free Practice (FP1/2)</div>
-                            <div className="text-[11px] font-semibold text-emerald-400 mt-1.5">
-                              A.K. Antonelli <span className="font-mono text-zinc-400 font-normal">(58.2%)</span>
-                            </div>
-                            <div className="text-[10px] text-zinc-400">Runner-up: C. Leclerc (22.4%) • VER (11.2%)</div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-zinc-800/60 text-[10px] text-zinc-500 leading-snug">
-                            Mercedes 346.2 km/h back straight speed & low tyre degradation vs Red Bull front graining.
-                          </div>
-                        </div>
-
-                        {/* Phase 3 */}
-                        <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 mb-1">
-                              <span>PHASE 3</span>
-                              <span className="text-amber-400">Official Quali</span>
-                            </div>
-                            <div className="font-bold text-xs text-zinc-200">Saturday Quali Grid</div>
-                            <div className="text-[11px] font-semibold text-amber-400 mt-1.5">
-                              A.K. Antonelli <span className="font-mono text-zinc-400 font-normal">(71.4%)</span>
-                            </div>
-                            <div className="text-[10px] text-zinc-400">P2: M. Verstappen (1:34.214)</div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-zinc-800/60 text-[10px] text-zinc-500 leading-snug">
-                            Pole position (1:34.035) & 1055 HP straight-line speed into T1 uphill apex.
-                          </div>
-                        </div>
-
-                        {/* Phase 4 */}
-                        <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 mb-1">
-                              <span>PHASE 4</span>
-                              <span className="font-bold text-emerald-400">Sunday Night Race</span>
-                            </div>
-                            <div className="font-bold text-xs text-white">Actual 2026 GP Outcome</div>
-                            <div className="text-[11px] font-semibold text-emerald-300 mt-1.5">
-                              🏆 A.K. Antonelli <span className="font-mono text-zinc-300 font-normal">(P1, 1:35:16)</span>
-                            </div>
-                            <div className="text-[10px] text-zinc-300 font-medium">P2: Leclerc (+13.0s) • P3: Verstappen</div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-emerald-500/20 text-[10px] text-zinc-300 leading-snug">
-                            🎯 100% Winner Prediction Hit: Antonelli dominated from pole for his 9th win of 2026!
-                          </div>
-                        </div>
+                          )
+                        )}
                       </div>
                     </div>
                   )}

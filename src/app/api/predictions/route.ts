@@ -35,6 +35,7 @@ export async function GET(request: Request)
   const { searchParams } = new URL(request.url);
   const track = (searchParams.get("track") || "monaco").toLowerCase() as "monaco" | "silverstone" | "monza" | "cota";
   const rain = searchParams.get("rain") === "true";
+  const session = (searchParams.get("session") === "fp1" ? "fp1" : "quali") as "quali" | "fp1";
   const modeParam = searchParams.get("mode") as QualiMode | null;
   const qualiMode: QualiMode = (modeParam === "without_quali" || modeParam === "manual_quali")
     ? modeParam
@@ -79,7 +80,7 @@ export async function GET(request: Request)
   }
 
   // Live Machine Learning inference execution
-  const prediction = runLiveMLInference(track, qualiMode, customGrid, rain);
+  const prediction = runLiveMLInference(track, qualiMode, customGrid, rain, session);
 
   try
   {
